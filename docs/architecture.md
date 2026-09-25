@@ -1,0 +1,152 @@
+# MotioCode architecture
+
+Written for: engineers working on this codebase.
+
+The short version: **a project is data, a frame is a number, and everything drawn
+on screen is a pure function of the two.** Keeping that true is what lets the
+editor preview and a future headless renderer agree on every pixel.
+
+## Layers
+
+```
+app/          Next.js routes only. Server Components fetch; Client Components interact.
+features/     Feature modules. Each owns its actions, queries and UI.
+core/         Framework-free. No React, no Next, no Supabase.
+components/   Shared design-system primitives.
+lib/          Supabase clients, env, small utilities.
+supabase/     Migration history (also applied to the hosted project).
+tests/        Vitest unit and component tests.
+```
+
+`core/` is the rule that keeps the rest honest. It has no imports from React,
+Next.js or Supabase, so the project model and animation engine can be reused by
+a Remotion composition or a render worker without dragging the UI along.
+
+```
+core/model/       Zod schemas + types: project, scene, element, animation, canvas, theme, export
+core/animation/   easing, interpolate, resolve (element -> render state), timeline (scenes -> frame axis)
+```
+
+## The timing model
+
+Everything is measured in **frames**. The project's `canvas.fps` is the only
+place frames become seconds.
+
+- A **scene** has `durationInFrames`.
+- An **element** has `from` (frames into its scene) and `durationInFrames`
+  (`null` means "until the scene ends").
+- An **animation** declares a `trigger` (`enter`, `exit`, `at`), an offset and a
+  duration, and is resolved against the element's local frame axis.
+
+`buildTimeline(scenes)` lays scenes onto one project-wide frame axis. A scene
+with an incoming transition *starts before the previous one ends*, so the two
+overlap; the overlap is capped so a transition can never consume a whole scene.
+During an overlap `getActiveSegments()` returns both scenes.
+
+`resolveElementState(element, sceneFrame, sceneDuration)` turns an element into
+a concrete render state. When several animations overlap:
+
+| Property | Rule |
+|---|---|
+| `opacity` | multiplies |
+| `translateX` / `translateY` | accumulates |
+| `scale` | multiplies |
+| `highlight` | strongest active highlight wins |
+| `revealProgress` | most restrictive (smallest) wins |
+
+Outside an animation's window the element holds that animation's start value
+(before) or end value (after), so state is defined at **every** frame. Exit
+animations run the same curve in reverse, which is why one preset works as both
+an entrance and an exit.
+
+### Why not CSS animations
+
+A CSS animation cannot be seeked to an arbitrary frame and cannot be rendered
+headlessly. `useFrameClock` derives the frame from elapsed wall-clock time and
+hands that single number down; components read only from the resolved state.
+
+## Data model and persistence
+
+Scenes are **rows**, elements are **JSON inside a row**.
+
+Scenes are the unit of reorder, duration and selection, so they earn columns the
+database can index and constrain. Elements are polymorphic and always loaded
+with their scene, so a relational element table would buy joins and schema churn
+for nothing. `scene_data` is validated with Zod on write *and* on read — stored
+JSON is treated as untrusted and a corrupt blob falls back to defaults rather
+than breaking the editor.
+
+`projects.data_version` and `project_scenes.data_version` exist so a future
+shape change can be migrated instead of guessed at.
+
+### Tables
+
+| Table | Notes |
+|---|---|
+| `profiles` | Created by a trigger on `auth.users` |
+| `projects` | `canvas_config`, `theme_config`, `export_config` as validated JSONB |
+| `project_scenes` | `scene_order` unique per project, **deferrable**, so a reorder lands in one transaction |
+| `assets` | Storage pointers, never file bytes |
+| `render_jobs` | Client creates and reads; only the render service advances `status` |
+
+### Row Level Security
+
+Every table is owner-scoped with `TO authenticated` **plus** an ownership
+predicate, and every UPDATE policy carries both `USING` and `WITH CHECK` so a
+row cannot be reassigned to another user.
+
+`project_scenes.owner_id` is **denormalised** from its project so no policy ever
+needs a join. It is set by a `BEFORE INSERT` trigger that runs as the *caller*
+(`SECURITY INVOKER`): a user who cannot see the project under RLS gets
+"project not found" instead of a scene. The client's `owner_id` is ignored.
+
+Verified behaviours:
+
+- A user sees 0 of another user's projects, scenes and profiles.
+- Inserting a scene into someone else's project is refused by the trigger.
+- Reassigning `owner_id` on your own project is refused by `WITH CHECK`.
+
+Storage buckets are all private, keyed `{owner_id}/{project_id}/{filename}`, with
+policies matching the first path segment against `auth.uid()`.
+
+## Auth
+
+`@supabase/ssr` with three clients: browser, request-scoped server, and the
+Next.js **proxy** (`proxy.ts` — Next 16's rename of middleware). The proxy
+refreshes the session on every request and gates routes.
+
+Server code always uses `getClaims()`, never `getSession()`: `getClaims()`
+verifies the JWT signature against the project's published keys.
+
+`/auth/confirm` handles both emailed link styles — a `token_hash` (custom email
+template) and a PKCE `code` (stock template) — so the flow works whichever the
+project is configured with.
+
+## Editor state
+
+One Zustand store per open project, created through `EditorStoreProvider`.
+The store holds the working copy, selection and save status.
+
+**Playback is deliberately not in the store.** The frame changes up to 60 times
+a second; routing it through a shared store would re-render every subscriber.
+`useFrameClock` lives in the shell and passes `frame` only to the canvas and the
+timeline.
+
+Saving is a debounced autosave plus a manual save (toolbar and Ctrl/Cmd+S). The
+payload is built from the store *at save time*, so a keystroke landing
+mid-debounce is never lost. The server re-validates the whole payload with Zod
+before it reaches the database.
+
+## Design system
+
+Dark-first, two accents used in strictly separate roles so colour carries
+meaning:
+
+- **amber** — the user and their actions (brand, buttons, selection)
+- **cyan** — time and the machine (playhead, timecodes, render status)
+
+Tokens live in `app/globals.css` under `@theme`. Frame counts and timecodes use
+the `.tabular` class so digits never shift as the playhead moves.
+
+Composition themes (`core/model/theme.ts`) are separate from the application's
+own chrome, so a user can build a light-themed video inside a dark editor.

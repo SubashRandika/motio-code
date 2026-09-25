@@ -1,26 +1,133 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+  MotioCode design tokens.
+
+  Two accents, used in strictly separate roles, so colour carries meaning:
+  - amber  = the user and their actions (brand, buttons, selection)
+  - cyan   = time and the machine (playhead, frame numbers, render status)
+  Nothing else gets an accent.
+*/
+@theme {
+  --color-ink: #0e1116;
+  --color-ink-sunk: #090c10;
+  --color-panel: #151a22;
+  --color-raised: #1e2530;
+  --color-line: #2a3340;
+  --color-line-strong: #3a4656;
+  --color-mist: #8a97a8;
+  --color-mist-dim: #5d6a7b;
+  --color-paper: #e8ecf2;
+
+  --color-amber: #f2a63b;
+  --color-amber-deep: #c9821f;
+  --color-amber-wash: #2a2014;
+
+  --color-cyan: #57d2e0;
+  --color-cyan-deep: #2b96a4;
+  --color-cyan-wash: #10262b;
+
+  --color-danger: #e5675e;
+  --color-danger-wash: #2c1614;
+  --color-ok: #6fcf8e;
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SFMono-Regular", monospace;
+
+  --radius-panel: 10px;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  html {
+    background-color: var(--color-ink);
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* One focus treatment everywhere, always visible on keyboard. */
+  :focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  ::selection {
+    background-color: var(--color-amber);
+    color: var(--color-ink);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  /* Frame counts, durations and timecodes are always monospaced and tabular
+     so digits never shift as the playhead moves. */
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /*
+    The timeline ruler. Frame ticks are painted with a repeating gradient
+    rather than elements, so a long timeline costs nothing to render.
+  */
+  .frame-ruler {
+    background-image: repeating-linear-gradient(
+      to right,
+      var(--color-line-strong) 0 1px,
+      transparent 1px var(--tick-gap, 12px)
+    );
+  }
+
+  .frame-ruler-major {
+    background-image:
+      repeating-linear-gradient(
+        to right,
+        var(--color-line-strong) 0 1px,
+        transparent 1px var(--tick-gap, 12px)
+      ),
+      repeating-linear-gradient(
+        to right,
+        var(--color-mist-dim) 0 1px,
+        transparent 1px calc(var(--tick-gap, 12px) * 5)
+      );
+  }
+
+  /* Canvas backdrop: a faint grid that reads as a composition surface. */
+  .canvas-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, var(--color-line) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--color-line) 55%, transparent) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
