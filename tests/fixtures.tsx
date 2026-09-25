@@ -1,10 +1,17 @@
+import { render } from "@testing-library/react";
+import type { ReactElement } from "react";
+
 import {
   canvasConfigSchema,
+  elementStyleSchema,
   exportConfigSchema,
   themeConfigSchema,
   type Project,
   type Scene,
+  type TextElement,
 } from "@/core/model";
+import { EditorStoreBridge } from "@/features/editor/store-provider";
+import type { EditorStoreApi } from "@/features/editor/store";
 
 export function makeScene(overrides: Partial<Scene> = {}): Scene {
   return {
@@ -13,6 +20,34 @@ export function makeScene(overrides: Partial<Scene> = {}): Scene {
     order: 0,
     durationInFrames: 150,
     data: { elements: [], transition: null, background: null, notes: "" },
+    ...overrides,
+  };
+}
+
+export function makeTextElement(overrides: Partial<TextElement> = {}): TextElement {
+  return {
+    id: "el_1",
+    name: "Text",
+    type: "text",
+    rect: { x: 100, y: 100, width: 400, height: 120 },
+    layer: 0,
+    from: 0,
+    durationInFrames: null,
+    locked: false,
+    hidden: false,
+    style: elementStyleSchema.parse({}),
+    animations: [],
+    content: {
+      text: "Hello",
+      font: "sans",
+      fontSize: 48,
+      fontWeight: 500,
+      lineHeight: 1.25,
+      letterSpacing: 0,
+      align: "left",
+      color: "#E8ECF2",
+      uppercase: false,
+    },
     ...overrides,
   };
 }
@@ -44,4 +79,9 @@ export function makeProject(overrides: Partial<Project> = {}): Project {
     ],
     ...overrides,
   };
+}
+
+/** Renders a component against a store the test already owns. */
+export function renderWithStore(ui: ReactElement, store: EditorStoreApi) {
+  return render(<EditorStoreBridge store={store}>{ui}</EditorStoreBridge>);
 }

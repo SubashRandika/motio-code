@@ -10,9 +10,21 @@ import { createEditorStore, type EditorStore, type EditorStoreApi } from "./stor
 const EditorStoreContext = createContext<EditorStoreApi | null>(null);
 
 /**
- * One store instance per open project. Creating it in a ref keeps the working
- * copy alive across re-renders without leaking between projects.
+ * Supplies an already-built store. Separated from `EditorStoreProvider` so a
+ * caller that owns the store's lifetime -- a test, or a future split-view --
+ * can share one instance across trees.
  */
+export function EditorStoreBridge({
+  store,
+  children,
+}: {
+  store: EditorStoreApi;
+  children: ReactNode;
+}) {
+  return <EditorStoreContext.Provider value={store}>{children}</EditorStoreContext.Provider>;
+}
+
+/** One store instance per open project. */
 export function EditorStoreProvider({
   project,
   children,
@@ -24,7 +36,7 @@ export function EditorStoreProvider({
   // initial project is never re-read afterwards.
   const [store] = useState<EditorStoreApi>(() => createEditorStore(project));
 
-  return <EditorStoreContext.Provider value={store}>{children}</EditorStoreContext.Provider>;
+  return <EditorStoreBridge store={store}>{children}</EditorStoreBridge>;
 }
 
 export function useEditorStore<T>(selector: (state: EditorStore) => T): T {

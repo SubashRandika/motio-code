@@ -15,15 +15,11 @@ export function ElementView({
   frame,
   sceneDurationInFrames,
   theme,
-  selected,
-  onSelect,
 }: {
   element: SceneElement;
   frame: number;
   sceneDurationInFrames: number;
   theme: ThemeConfig;
-  selected?: boolean;
-  onSelect?: (elementId: string) => void;
 }) {
   const state = resolveElementState(element, frame, sceneDurationInFrames);
   if (!state.visible) return null;
@@ -33,7 +29,6 @@ export function ElementView({
   return (
     <div
       data-element-id={element.id}
-      onPointerDown={onSelect ? () => onSelect(element.id) : undefined}
       style={{
         position: "absolute",
         left: rect.x,
@@ -47,9 +42,10 @@ export function ElementView({
         borderRadius: style.cornerRadius,
         padding: style.padding,
         boxShadow: style.shadow ? "0 18px 40px rgba(0,0,0,0.35)" : undefined,
-        outline: selected ? "1px solid var(--color-amber)" : undefined,
-        outlineOffset: 2,
         overflow: "hidden",
+        // Selection chrome lives in the overlay above the stage; the element
+        // itself only advertises that it can be picked up.
+        cursor: element.locked ? "default" : "move",
       }}
     >
       <ElementContent element={element} state={state} theme={theme} />

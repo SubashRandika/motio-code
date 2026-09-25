@@ -25,6 +25,7 @@ a Remotion composition or a render worker without dragging the UI along.
 ```
 core/model/       Zod schemas + types: project, scene, element, animation, canvas, theme, export
 core/animation/   easing, interpolate, resolve (element -> render state), timeline (scenes -> frame axis)
+core/editing/     geometry (resize, snap, align, marquee) and history (bounded undo stack)
 ```
 
 ## The timing model
@@ -132,10 +133,63 @@ a second; routing it through a shared store would re-render every subscriber.
 `useFrameClock` lives in the shell and passes `frame` only to the canvas and the
 timeline.
 
+Every project change goes through one `edit()` helper in the store, which runs
+the recipe, records the previous project for undo, and marks the project dirty.
+Nothing mutates the project outside that path.
+
+Selector discipline: a selector that builds a new array (`selectSelectedElements`)
+must be wrapped in `useShallow`. Zustand compares with `Object.is`, so returning
+a fresh array from a bare selector re-renders forever.
+
 Saving is a debounced autosave plus a manual save (toolbar and Ctrl/Cmd+S). The
 payload is built from the store *at save time*, so a keystroke landing
 mid-debounce is never lost. The server re-validates the whole payload with Zod
 before it reaches the database.
+
+### Undo
+
+`core/editing/history.ts` is a bounded stack of whole project snapshots, capped
+at 80 steps. Snapshots rather than inverse commands: the project is plain data
+updated immutably, so untouched scenes are shared between snapshots and a step
+costs little more than what actually changed. It is also impossible to get
+wrong, which matters more than the bytes.
+
+Steps are grouped by a `coalesceKey`:
+
+- A run of typing shares a key and collapses inside a 700ms window, so a name
+  edit is one undo, not one per character.
+- A drag passes a key unique to that gesture plus `coalesceWindowMs: Infinity`,
+  so the whole gesture is one step however long it lasts.
+
+Undo restores the project only. Selection is repaired afterwards by dropping
+any scene or element that the restored project no longer contains.
+
+## Canvas editing
+
+All pointer maths happens in **canvas units**, never screen pixels, so a drag
+means the same thing at any zoom and produces coordinates identical to what a
+render at another resolution uses.
+
+Selection chrome (outlines, the eight resize handles, snap guides, the marquee)
+is drawn in an overlay *outside* the scaled layer, in display pixels. That is
+what keeps handles the same physical size as you zoom.
+
+Snapping offers the canvas edges and centre plus every other element's edges and
+centre. Only the closest line within the threshold wins per axis, so an element
+never jitters between two competing guides. Alt disables it.
+
+Layer numbers are normalised to 0..n-1 after every change. Two helpers, and the
+difference matters: `assignLayers` numbers by array order (used after a
+reorder), `relayer` sorts by existing layer first (used after an add or delete).
+Sorting after a reorder would undo the reorder.
+
+## Configuration panel
+
+An optional JSON view of the active scene, validated against the same
+`sceneDataSchema` the server uses. Edits are never applied as you type: a failed
+validation leaves the text exactly as written and lists the failing paths, so
+nothing typed is lost. Changes made on the canvas flow back into the draft only
+while the draft is clean.
 
 ## Design system
 

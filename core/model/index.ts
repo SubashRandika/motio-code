@@ -7,3 +7,4 @@ export * from "./theme";
 export * from "./export";
 export * from "./project";
 export * from "./defaults";
+export * from "./factories";

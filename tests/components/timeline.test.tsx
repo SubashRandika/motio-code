@@ -1,12 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildTimeline } from "@/core/animation";
+import type { Project } from "@/core/model";
+import { createEditorStore } from "@/features/editor/store";
 import { TimelinePanel } from "@/features/editor/timeline";
 import type { FrameClock } from "@/features/preview/use-frame-clock";
 
-import { makeProject } from "../fixtures";
+import { makeProject, makeTextElement, renderWithStore } from "../fixtures";
 
 function makeClock(overrides: Partial<FrameClock> = {}): FrameClock {
   return {
@@ -21,25 +23,22 @@ function makeClock(overrides: Partial<FrameClock> = {}): FrameClock {
   };
 }
 
-function renderTimeline(clock: FrameClock, frame = 0) {
-  const project = makeProject();
+function renderTimeline(clock: FrameClock, frame = 0, project: Project = makeProject()) {
   const timeline = buildTimeline(project.scenes);
-  const onSelectScene = vi.fn();
-  const onSelectElement = vi.fn();
+  const store = createEditorStore(project);
 
-  render(
-    <TimelinePanel
-      project={project}
-      timeline={timeline}
-      clock={{ ...clock, frame }}
-      activeSceneId={project.scenes[0].id}
-      selectedElementId={null}
-      onSelectScene={onSelectScene}
-      onSelectElement={onSelectElement}
-    />,
-  );
+  renderWithStore(<TimelinePanel timeline={timeline} clock={{ ...clock, frame }} />, store);
 
-  return { project, timeline, onSelectScene, onSelectElement };
+  return { project, timeline, store };
+}
+
+/** jsdom has no layout, so give the clip track a width the drag maths can use. */
+function stubTrackWidth(width = 1000) {
+  const track = document.querySelector<HTMLElement>("[data-clip-track]");
+  if (!track) throw new Error("no clip track rendered");
+  track.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, width, height: 20, right: width, bottom: 20, x: 0, y: 0 }) as DOMRect;
+  return track;
 }
 
 describe("TimelinePanel transport", () => {
@@ -52,9 +51,6 @@ describe("TimelinePanel transport", () => {
   });
 
   it("labels the transport button by what pressing it does", () => {
-    const { unmount } = render(<div />);
-    unmount();
-
     renderTimeline(makeClock({ playing: false }));
     expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
   });
@@ -94,8 +90,7 @@ describe("TimelinePanel transport", () => {
     const clock = makeClock();
     renderTimeline(clock, 30);
 
-    const slider = screen.getByRole("slider", { name: "Playhead" });
-    slider.focus();
+    screen.getByRole("slider", { name: "Playhead" }).focus();
 
     await user.keyboard("{ArrowRight}");
     expect(clock.step).toHaveBeenCalledWith(1);
@@ -110,16 +105,101 @@ describe("TimelinePanel transport", () => {
   it("moves the playhead to a scene when its block is clicked", async () => {
     const user = userEvent.setup();
     const clock = makeClock();
-    const { onSelectScene, project } = renderTimeline(clock);
+    const { store, project } = renderTimeline(clock);
 
     await user.click(screen.getByRole("button", { name: "The check" }));
 
-    expect(onSelectScene).toHaveBeenCalledWith(project.scenes[1].id);
+    expect(store.getState().selectedSceneId).toBe(project.scenes[1].id);
     expect(clock.seek).toHaveBeenCalledWith(150);
   });
 
   it("explains the empty element track instead of showing nothing", () => {
     renderTimeline(makeClock());
     expect(screen.getByText(/This scene has no elements yet/)).toBeInTheDocument();
+  });
+});
+
+describe("TimelinePanel element clips", () => {
+  function projectWithElement() {
+    const project = makeProject();
+    project.scenes[0].data.elements = [
+      makeTextElement({ id: "el_1", name: "Title", from: 30, durationInFrames: 60 }),
+    ];
+    return project;
+  }
+
+  it("lists a clip per element with its frame range", () => {
+    renderTimeline(makeClock(), 0, projectWithElement());
+    expect(screen.getByText("30–90f")).toBeInTheDocument();
+  });
+
+  it("selects an element from its track label", async () => {
+    const user = userEvent.setup();
+    const { store } = renderTimeline(makeClock(), 0, projectWithElement());
+
+    await user.click(screen.getByRole("button", { name: "Title" }));
+    expect(store.getState().selectedElementIds).toEqual(["el_1"]);
+  });
+
+  it("drags a clip to change when the element starts", () => {
+    const { store } = renderTimeline(makeClock(), 0, projectWithElement());
+    stubTrackWidth(1000);
+
+    const clip = screen.getByRole("group", { name: "Title timing" });
+    // The track spans 240 frames over 1000px, so a 100px drag is 24 frames.
+    fireEvent.pointerDown(clip, { clientX: 200, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(clip, { clientX: 300, pointerId: 1 });
+    fireEvent.pointerUp(clip, { clientX: 300, pointerId: 1 });
+
+    const element = store.getState().project.scenes[0].data.elements[0];
+    expect(element.from).toBe(54);
+    // Trimming is a separate gesture; a move keeps the length.
+    expect(element.durationInFrames).toBe(60);
+  });
+
+  it("keeps a whole drag as a single undo step", () => {
+    const { store } = renderTimeline(makeClock(), 0, projectWithElement());
+    stubTrackWidth(1000);
+
+    const clip = screen.getByRole("group", { name: "Title timing" });
+    fireEvent.pointerDown(clip, { clientX: 200, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(clip, { clientX: 220, pointerId: 1 });
+    fireEvent.pointerMove(clip, { clientX: 260, pointerId: 1 });
+    fireEvent.pointerMove(clip, { clientX: 300, pointerId: 1 });
+    fireEvent.pointerUp(clip, { clientX: 300, pointerId: 1 });
+
+    expect(store.getState().history.past).toHaveLength(1);
+
+    store.getState().undo();
+    expect(store.getState().project.scenes[0].data.elements[0].from).toBe(30);
+  });
+
+  it("never drags a clip past the start of its scene", () => {
+    const { store } = renderTimeline(makeClock(), 0, projectWithElement());
+    stubTrackWidth(1000);
+
+    const clip = screen.getByRole("group", { name: "Title timing" });
+    fireEvent.pointerDown(clip, { clientX: 500, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(clip, { clientX: 0, pointerId: 1 });
+    fireEvent.pointerUp(clip, { clientX: 0, pointerId: 1 });
+
+    expect(store.getState().project.scenes[0].data.elements[0].from).toBe(0);
+  });
+
+  it("does not move a locked element", () => {
+    const project = makeProject();
+    project.scenes[0].data.elements = [
+      makeTextElement({ id: "el_1", name: "Title", from: 30, durationInFrames: 60, locked: true }),
+    ];
+
+    const { store } = renderTimeline(makeClock(), 0, project);
+    stubTrackWidth(1000);
+
+    const clip = screen.getByRole("group", { name: "Title timing" });
+    fireEvent.pointerDown(clip, { clientX: 200, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(clip, { clientX: 400, pointerId: 1 });
+    fireEvent.pointerUp(clip, { clientX: 400, pointerId: 1 });
+
+    expect(store.getState().project.scenes[0].data.elements[0].from).toBe(30);
   });
 });

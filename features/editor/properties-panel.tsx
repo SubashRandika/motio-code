@@ -1,6 +1,19 @@
 "use client";
 
-import { Input, Label, Select } from "@/components/ui/field";
+import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  Copy,
+  Trash2,
+} from "lucide-react";
+
+import { useShallow } from "zustand/shallow";
+
+import type { Alignment } from "@/core/editing";
 import {
   ASPECT_RATIOS,
   BUILT_IN_THEMES,
@@ -12,301 +25,284 @@ import {
 } from "@/core/model";
 import { formatDuration } from "@/lib/utils/format";
 
-import { selectActiveScene } from "./store";
+import {
+  ColorField,
+  NumberField,
+  Row,
+  Section,
+  SelectField,
+  TextField,
+} from "./properties/controls";
+import { ElementProperties } from "./properties/element-properties";
+import { selectActiveScene, selectSelectedElements } from "./store";
 import { useEditorStore } from "./store-provider";
 
-const TRANSITION_TYPES: Transition["type"][] = ["cut", "fade", "slide", "wipe"];
+const TRANSITION_OPTIONS: { value: Transition["type"]; label: string }[] = [
+  { value: "cut", label: "Cut" },
+  { value: "fade", label: "Fade" },
+  { value: "slide", label: "Slide" },
+  { value: "wipe", label: "Wipe" },
+];
+
+const ALIGN_BUTTONS: { alignment: Alignment; label: string; icon: typeof AlignStartVertical }[] = [
+  { alignment: "left", label: "Align left", icon: AlignStartVertical },
+  { alignment: "centerX", label: "Align horizontal centres", icon: AlignCenterVertical },
+  { alignment: "right", label: "Align right", icon: AlignEndVertical },
+  { alignment: "top", label: "Align top", icon: AlignStartHorizontal },
+  { alignment: "centerY", label: "Align vertical centres", icon: AlignCenterHorizontal },
+  { alignment: "bottom", label: "Align bottom", icon: AlignEndHorizontal },
+];
 
 export function PropertiesPanel() {
   const scene = useEditorStore(selectActiveScene);
+  // selectSelectedElements builds a new array each call, so it needs a shallow
+  // comparison -- a reference check would re-render forever.
+  const selected = useEditorStore(useShallow(selectSelectedElements));
   const canvas = useEditorStore((state) => state.project.canvas);
-  const theme = useEditorStore((state) => state.project.theme);
-  const exportConfig = useEditorStore((state) => state.project.export);
-  const selectedElementId = useEditorStore((state) => state.selectedElementId);
-
-  const renameScene = useEditorStore((state) => state.renameScene);
-  const setSceneDuration = useEditorStore((state) => state.setSceneDuration);
-  const setSceneTransition = useEditorStore((state) => state.setSceneTransition);
-  const setCanvas = useEditorStore((state) => state.setCanvas);
-  const setTheme = useEditorStore((state) => state.setTheme);
-  const setExport = useEditorStore((state) => state.setExport);
-
-  const element = scene?.data.elements.find((item) => item.id === selectedElementId) ?? null;
-  const transition = scene?.data.transition;
 
   if (!scene) return null;
 
   return (
     <div className="flex flex-col divide-y divide-line">
-      {element ? (
-        <Section title={element.name}>
-          <Row label="Type" value={element.type} />
-          <Row label="Position" value={`${Math.round(element.rect.x)}, ${Math.round(element.rect.y)}`} />
-          <Row
-            label="Size"
-            value={`${Math.round(element.rect.width)} × ${Math.round(element.rect.height)}`}
-          />
-          <Row label="Layer" value={String(element.layer)} />
-          <Row
-            label="Timing"
-            value={`from ${element.from} for ${element.durationInFrames ?? "rest of scene"}`}
-          />
-          <Row label="Animations" value={String(element.animations.length)} />
-          <p className="pt-1 text-[11.5px] leading-relaxed text-mist-dim">
-            Element editing arrives with the canvas tools in the next phase.
-          </p>
-        </Section>
+      {selected.length > 1 ? <MultiSelection count={selected.length} /> : null}
+
+      {selected.length === 1 ? (
+        <ElementProperties
+          element={selected[0]}
+          fps={canvas.fps}
+          sceneDurationInFrames={scene.durationInFrames}
+        />
       ) : null}
 
-      {/* ------------------------------------------------------------ scene */}
-      <Section title="Scene">
-        <LabeledField label="Name">
-          {(id) => (
-            <Input
-              id={id}
-              value={scene.name}
-              maxLength={120}
-              onChange={(event) => renameScene(scene.id, event.target.value)}
-            />
-          )}
-        </LabeledField>
+      {selected.length === 0 ? <SceneProperties /> : null}
 
-        <LabeledField label="Duration (frames)">
-          {(id) => (
-            <div className="flex items-center gap-2">
-              <Input
-                id={id}
-                type="number"
-                min={1}
-                max={108000}
-                value={scene.durationInFrames}
-                onChange={(event) => setSceneDuration(scene.id, Number(event.target.value))}
-              />
-              <span className="tabular shrink-0 text-[12px] text-mist-dim">
-                {formatDuration(scene.durationInFrames, canvas.fps)}
-              </span>
-            </div>
-          )}
-        </LabeledField>
+      <CanvasProperties />
+      <ThemeProperties />
+      <ExportProperties />
+    </div>
+  );
+}
 
-        <LabeledField label="Enters with">
-          {(id) => (
-            <Select
-              id={id}
-              value={transition?.type ?? "cut"}
-              onChange={(event) => {
-                const type = event.target.value as Transition["type"];
-                setSceneTransition(
-                  scene.id,
-                  type === "cut"
-                    ? { type: "cut", durationInFrames: 0, direction: "left", easing: "easeInOut" }
-                    : {
-                        type,
-                        durationInFrames: transition?.durationInFrames || 15,
-                        direction: transition?.direction ?? "left",
-                        easing: transition?.easing ?? "easeInOut",
-                      },
-                );
-              }}
-            >
-              {TRANSITION_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </Select>
-          )}
-        </LabeledField>
+function MultiSelection({ count }: { count: number }) {
+  const alignSelection = useEditorStore((state) => state.alignSelection);
+  const duplicateSelection = useEditorStore((state) => state.duplicateSelection);
+  const deleteSelection = useEditorStore((state) => state.deleteSelection);
 
-        {transition && transition.type !== "cut" ? (
-          <LabeledField label="Transition length (frames)">
-            {(id) => (
-              <Input
-                id={id}
-                type="number"
-                min={1}
-                max={300}
-                value={transition.durationInFrames}
-                onChange={(event) =>
-                  setSceneTransition(scene.id, {
-                    ...transition,
-                    durationInFrames: Math.max(1, Number(event.target.value)),
-                  })
-                }
-              />
-            )}
-          </LabeledField>
-        ) : null}
-      </Section>
+  return (
+    <Section title={`${count} elements selected`}>
+      <div className="grid grid-cols-6 gap-1">
+        {ALIGN_BUTTONS.map(({ alignment, label, icon: Icon }) => (
+          <button
+            key={alignment}
+            type="button"
+            onClick={() => alignSelection(alignment)}
+            aria-label={label}
+            title={label}
+            className="grid h-8 place-items-center rounded border border-line bg-raised text-mist transition-colors hover:border-line-strong hover:text-paper"
+          >
+            <Icon className="size-3.5" />
+          </button>
+        ))}
+      </div>
 
-      {/* ----------------------------------------------------------- canvas */}
-      <Section title="Canvas">
-        <LabeledField label="Aspect ratio">
-          {(id) => (
-            <Select
-              id={id}
-              value={canvas.aspectRatio}
-              onChange={(event) => {
-                const next = canvasForAspectRatio(
-                  event.target.value as (typeof ASPECT_RATIOS)[number],
-                  canvas.fps,
-                );
-                setCanvas({ ...next, background: canvas.background });
-              }}
-            >
-              {ASPECT_RATIOS.map((ratio) => (
-                <option key={ratio} value={ratio}>
-                  {ratio} — {CANVAS_PRESETS[ratio].label}
-                </option>
-              ))}
-            </Select>
-          )}
-        </LabeledField>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={duplicateSelection}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded border border-line bg-raised py-1.5 text-[12px] text-mist transition-colors hover:border-line-strong hover:text-paper"
+        >
+          <Copy className="size-3" />
+          Duplicate
+        </button>
+        <button
+          type="button"
+          onClick={deleteSelection}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded border border-line bg-raised py-1.5 text-[12px] text-mist transition-colors hover:border-danger/50 hover:bg-danger-wash hover:text-danger"
+        >
+          <Trash2 className="size-3" />
+          Delete
+        </button>
+      </div>
+    </Section>
+  );
+}
 
-        <LabeledField label="Frame rate">
-          {(id) => (
-            <Select
-              id={id}
-              value={canvas.fps}
-              onChange={(event) => setCanvas({ fps: Number(event.target.value) })}
-            >
-              {FPS_OPTIONS.map((fps) => (
-                <option key={fps} value={fps}>
-                  {fps} fps
-                </option>
-              ))}
-            </Select>
-          )}
-        </LabeledField>
+function SceneProperties() {
+  const scene = useEditorStore(selectActiveScene);
+  const fps = useEditorStore((state) => state.project.canvas.fps);
+  const renameScene = useEditorStore((state) => state.renameScene);
+  const setSceneDuration = useEditorStore((state) => state.setSceneDuration);
+  const setSceneTransition = useEditorStore((state) => state.setSceneTransition);
 
-        <LabeledField label="Background">
-          {(id) => (
-            <div className="flex items-center gap-2">
-              <input
-                id={id}
-                type="color"
-                value={canvas.background.slice(0, 7)}
-                onChange={(event) => setCanvas({ background: event.target.value })}
-                className="h-9 w-12 shrink-0 cursor-pointer rounded border border-line bg-ink-sunk"
-              />
-              <span className="tabular text-[12px] text-mist-dim">{canvas.background}</span>
-            </div>
-          )}
-        </LabeledField>
-      </Section>
+  if (!scene) return null;
+  const transition = scene.data.transition;
 
-      {/* ------------------------------------------------------------ theme */}
-      <Section title="Theme">
-        <LabeledField label="Composition theme">
-          {(id) => (
-            <Select
-              id={id}
-              value={theme.name}
-              onChange={(event) => {
-                const next = BUILT_IN_THEMES.find((item) => item.name === event.target.value);
-                if (next) {
-                  setTheme(next);
-                  setCanvas({ background: next.background });
-                }
-              }}
-            >
-              {BUILT_IN_THEMES.map((item) => (
-                <option key={item.name} value={item.name}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
-          )}
-        </LabeledField>
+  return (
+    <Section title="Scene">
+      <TextField
+        label="Name"
+        value={scene.name}
+        maxLength={120}
+        onChange={(name) => renameScene(scene.id, name)}
+      />
 
-        <div className="flex gap-1.5 pt-1">
-          {[theme.background, theme.surface, theme.border, theme.text, theme.accent, theme.accentAlt].map(
-            (color) => (
-              <span
-                key={color}
-                title={color}
-                className="size-6 rounded border border-line"
-                style={{ backgroundColor: color }}
-              />
-            ),
-          )}
+      <Row>
+        <NumberField
+          label="Duration"
+          value={scene.durationInFrames}
+          min={1}
+          max={108000}
+          suffix="f"
+          onChange={(duration) => setSceneDuration(scene.id, duration)}
+        />
+        <div className="flex flex-col justify-end pb-2.5">
+          <span className="tabular text-[12px] text-mist-dim">
+            {formatDuration(scene.durationInFrames, fps)}
+          </span>
         </div>
-      </Section>
+      </Row>
 
-      {/* ----------------------------------------------------------- export */}
-      <Section title="Export">
-        <LabeledField label="Format">
-          {(id) => (
-            <Select
-              id={id}
-              value={exportConfig.format}
-              onChange={(event) =>
-                setExport({ format: event.target.value as typeof exportConfig.format })
-              }
-            >
-              <option value="mp4">MP4</option>
-              <option value="webm">WebM</option>
-              <option value="gif">GIF</option>
-            </Select>
-          )}
-        </LabeledField>
+      <SelectField
+        label="Enters with"
+        value={transition?.type ?? "cut"}
+        options={TRANSITION_OPTIONS}
+        onChange={(type) =>
+          setSceneTransition(
+            scene.id,
+            type === "cut"
+              ? { type: "cut", durationInFrames: 0, direction: "left", easing: "easeInOut" }
+              : {
+                  type,
+                  durationInFrames: transition?.durationInFrames || 15,
+                  direction: transition?.direction ?? "left",
+                  easing: transition?.easing ?? "easeInOut",
+                },
+          )
+        }
+      />
 
-        <LabeledField label="Resolution">
-          {(id) => (
-            <Select
-              id={id}
-              value={exportConfig.resolution}
-              onChange={(event) =>
-                setExport({ resolution: event.target.value as typeof exportConfig.resolution })
-              }
-            >
-              {EXPORT_RESOLUTIONS.map((resolution) => (
-                <option key={resolution} value={resolution}>
-                  {resolution}
-                </option>
-              ))}
-            </Select>
-          )}
-        </LabeledField>
-
-        <p className="text-[11.5px] leading-relaxed text-mist-dim">
-          Rendering arrives in a later phase. These settings are saved with the project.
-        </p>
-      </Section>
-    </div>
+      {transition && transition.type !== "cut" ? (
+        <NumberField
+          label="Transition length"
+          value={transition.durationInFrames}
+          min={1}
+          max={300}
+          suffix="f"
+          onChange={(durationInFrames) =>
+            setSceneTransition(scene.id, { ...transition, durationInFrames })
+          }
+        />
+      ) : null}
+    </Section>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function CanvasProperties() {
+  const canvas = useEditorStore((state) => state.project.canvas);
+  const setCanvas = useEditorStore((state) => state.setCanvas);
+
   return (
-    <section className="flex flex-col gap-3 px-3 py-4">
-      <h2 className="text-[11px] font-medium tracking-[0.14em] text-mist-dim uppercase">{title}</h2>
-      {children}
-    </section>
+    <Section title="Canvas">
+      <SelectField
+        label="Aspect ratio"
+        value={canvas.aspectRatio}
+        options={ASPECT_RATIOS.map((ratio) => ({
+          value: ratio,
+          label: `${ratio} — ${CANVAS_PRESETS[ratio].label}`,
+        }))}
+        onChange={(ratio) => {
+          const next = canvasForAspectRatio(ratio, canvas.fps);
+          setCanvas({ ...next, background: canvas.background });
+        }}
+      />
+
+      <SelectField
+        label="Frame rate"
+        value={String(canvas.fps)}
+        options={FPS_OPTIONS.map((fps) => ({ value: String(fps), label: `${fps} fps` }))}
+        onChange={(fps) => setCanvas({ fps: Number(fps) })}
+      />
+
+      <ColorField
+        label="Background"
+        value={canvas.background}
+        onChange={(background) => setCanvas({ background: background ?? "#000000" })}
+      />
+    </Section>
   );
 }
 
-function LabeledField({
-  label,
-  children,
-}: {
-  label: string;
-  children: (id: string) => React.ReactNode;
-}) {
-  const id = `field-${label.replace(/\W+/g, "-").toLowerCase()}`;
+function ThemeProperties() {
+  const theme = useEditorStore((state) => state.project.theme);
+  const setTheme = useEditorStore((state) => state.setTheme);
+  const setCanvas = useEditorStore((state) => state.setCanvas);
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {children(id)}
-    </div>
+    <Section title="Theme">
+      <SelectField
+        label="Composition theme"
+        value={theme.name}
+        options={BUILT_IN_THEMES.map((item) => ({ value: item.name, label: item.name }))}
+        onChange={(name) => {
+          const next = BUILT_IN_THEMES.find((item) => item.name === name);
+          if (!next) return;
+          setTheme(next);
+          setCanvas({ background: next.background });
+        }}
+      />
+
+      <div className="flex gap-1.5">
+        {[
+          theme.background,
+          theme.surface,
+          theme.border,
+          theme.text,
+          theme.accent,
+          theme.accentAlt,
+        ].map((color) => (
+          <span
+            key={color}
+            title={color}
+            className="size-6 rounded border border-line"
+            style={{ backgroundColor: color }}
+          />
+        ))}
+      </div>
+    </Section>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function ExportProperties() {
+  const exportConfig = useEditorStore((state) => state.project.export);
+  const setExport = useEditorStore((state) => state.setExport);
+
   return (
-    <div className="flex items-baseline justify-between gap-3 text-[12px]">
-      <span className="text-mist-dim">{label}</span>
-      <span className="tabular truncate text-paper">{value}</span>
-    </div>
+    <Section title="Export">
+      <Row>
+        <SelectField
+          label="Format"
+          value={exportConfig.format}
+          options={[
+            { value: "mp4" as const, label: "MP4" },
+            { value: "webm" as const, label: "WebM" },
+            { value: "gif" as const, label: "GIF" },
+          ]}
+          onChange={(format) => setExport({ format })}
+        />
+        <SelectField
+          label="Resolution"
+          value={exportConfig.resolution}
+          options={EXPORT_RESOLUTIONS.map((resolution) => ({
+            value: resolution,
+            label: resolution,
+          }))}
+          onChange={(resolution) => setExport({ resolution })}
+        />
+      </Row>
+
+      <p className="text-[11.5px] leading-relaxed text-mist-dim">
+        Rendering arrives in a later phase. These settings are saved with the project.
+      </p>
+    </Section>
   );
 }
