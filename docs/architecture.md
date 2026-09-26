@@ -597,6 +597,62 @@ revenue, and the render-based tier is exactly what a product that renders videos
 for its users falls into. `docs/decisions/remotion-licensing.md` records the
 terms as they were read, with dates.
 
+## Testing
+
+Two suites, split by what they can actually see.
+
+```
+tests/   Vitest. Pure logic and components, in jsdom. Fast, run constantly.
+e2e/     Playwright. Real browser, real server, real requests.
+```
+
+`vitest.config.mts` includes only `tests/**/*.test.{ts,tsx}`, so the Playwright
+specs in `e2e/` are never swept up by the unit runner.
+
+### What only a browser can answer
+
+Three things are structurally invisible to the unit suite, and each has already
+hidden a real defect:
+
+1. **Route protection lives in the proxy (middleware).** It runs only for a real
+   request, so no component test can reach it. `e2e/auth-gate.spec.ts` checks
+   every protected route redirects a signed-out visitor to `/login?next=…`, and
+   that the public ones stay public.
+2. **jsdom has no layout engine**, so every element measures 0x0 and nothing can
+   overflow. `e2e/responsive.spec.ts` found the landing page scrolling sideways
+   by 72px on a Pixel 5: below `lg` the hero's single-column grid track sized to
+   the code block's max-content, and `overflow-x-auto` cannot shrink a
+   content-sized grid track. `grid-cols-1` -- Tailwind's `minmax(0,1fr)` -- is
+   the fix.
+3. **A redirect is settled by the browser, not by the function that returned it.**
+   See below.
+
+### Playwright runs against a build, on its own port
+
+The `webServer` runs `next build && next start --port 3100`, not `next dev`.
+A production build is what ships, dev mode's on-demand compilation makes a first
+navigation look like a timeout, and a dedicated port stops a run silently reusing
+a dev server the author already had open on 3000 -- which would test whatever code
+*that* server was running.
+
+The suite runs at two viewports: `Desktop Chrome` and `Pixel 5`. The editor is
+excluded from the mobile project because it is desktop-first by design.
+
+### The authenticated half is not covered yet
+
+Everything above is signed out. The §20 journey -- sign in, create, edit, preview,
+save, reopen, export -- needs a session, and both ways of getting one carry a cost
+that is not ours to choose unilaterally:
+
+- A **local Supabase stack** (`supabase start`) needs Docker, which is not
+  installed on this machine.
+- A **dedicated test user on the hosted project** means Playwright creating and
+  deleting real rows in the same database that holds real work, and signup needs
+  email confirmation.
+
+Until that is decided, the authenticated flows are covered by component tests
+against the store and by hand.
+
 ## Schema evolution
 
 Stored scenes outlive the code that wrote them. Two rules:
@@ -618,6 +674,27 @@ and `ELEMENT_ICONS` are `Record<ElementType, …>`, and `ElementContent` ends by
 assigning the narrowed element to `never`. A new element kind therefore fails to
 compile in three places until it has a label, an icon and something to draw,
 instead of quietly rendering nothing.
+
+### Redirect targets are judged after resolution, not before
+
+`safeRedirectPath` decides where a user lands after signing in, and its input
+arrives in a link anyone can email. A leading-slash check is not enough, because
+a browser rewrites a path before following it:
+
+| input | becomes | why |
+| --- | --- | --- |
+| `/\evil.com` | `//evil.com` | a backslash normalises to a forward slash |
+| `/..//evil.com` | `//evil.com` | traversal collapses after parsing |
+| `/<tab>/evil.com` | `//evil.com` | control characters are stripped |
+
+All three passed the original check, and `//evil.com` is protocol-relative -- it
+inherits the scheme and goes off-site. That is a phishing primitive: the victim
+starts on the real domain and finishes somewhere else, already trusting the page.
+
+Rather than enumerate tricks, the candidate is now resolved against a reserved
+`.invalid` origin and the *result* is judged: the origin must not have moved, and
+the resolved path must still start with a single slash. Both halves are needed --
+traversal keeps the origin while producing a protocol-relative path.
 
 ## Design system
 

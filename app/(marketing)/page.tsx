@@ -82,7 +82,10 @@ export default function LandingPage() {
       <main id="main" className="flex-1">
         {/* ------------------------------------------------------------ hero */}
         <section className="mx-auto w-full max-w-6xl px-4 pt-12 pb-16 sm:px-6 sm:pt-20">
-          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] lg:gap-14">
+          {/* grid-cols-1 is minmax(0,1fr): without it the single-column track
+              sizes to the code block's max-content and overflows a phone,
+              because overflow-x-auto cannot shrink a content-sized grid track. */}
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] lg:gap-14">
             <div>
               <p className="tabular flex items-center gap-2 text-[11px] tracking-[0.18em] text-mist-dim uppercase">
                 <span className="h-px w-6 bg-line-strong" />

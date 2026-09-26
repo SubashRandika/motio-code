@@ -32,6 +32,27 @@ async function openMenu(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /Actions for/ }));
 }
 
+describe("duplicating a project", () => {
+  it("duplicates on the menu item, without a confirmation", async () => {
+    // Duplicating is additive and cheap to undo by deleting the copy, so it does
+    // not need the confirmation that deleting does.
+    const { duplicate, user } = setup();
+    await openMenu(user);
+    await user.click(screen.getByRole("menuitem", { name: /Duplicate/ }));
+
+    expect(duplicate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("closes the menu so the copy is not duplicated twice by accident", async () => {
+    const { user } = setup();
+    await openMenu(user);
+    await user.click(screen.getByRole("menuitem", { name: /Duplicate/ }));
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+});
+
 describe("deleting a project from the dashboard", () => {
   beforeEach(() => {
     renameProjectAction.mockClear();
