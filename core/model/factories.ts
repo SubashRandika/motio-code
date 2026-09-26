@@ -2,10 +2,12 @@ import type { Animation, AnimationType } from "./animation";
 import type { CanvasConfig } from "./canvas";
 import {
   elementStyleSchema,
+  type AddableElementType,
   type CalloutElement,
   type CodeElement,
   type ElementType,
   type ImageElement,
+  type NodeElement,
   type SceneElement,
   type ShapeElement,
   type TextElement,
@@ -44,7 +46,10 @@ const SAMPLE_CODE = `export function greet(name: string) {
   return \`Hello, \${name}\`;
 }`;
 
-export function createElement(type: ElementType, context: ElementFactoryContext): SceneElement {
+export function createElement(
+  type: AddableElementType,
+  context: ElementFactoryContext,
+): SceneElement {
   const { canvas, theme, index } = context;
 
   switch (type) {
@@ -157,6 +162,39 @@ export function createElement(type: ElementType, context: ElementFactoryContext)
       return element;
     }
 
+    case "node": {
+      const element: NodeElement = {
+        id: createId("nd"),
+        name: "Service",
+        type: "node",
+        rect: centredRect(canvas, 0.16, 0.11, index),
+        layer: index,
+        from: 0,
+        durationInFrames: null,
+        locked: false,
+        hidden: false,
+        style: {
+          ...BASE_STYLE,
+          fill: theme.surface,
+          stroke: theme.border,
+          strokeWidth: 2,
+          cornerRadius: 10,
+        },
+        animations: [],
+        content: {
+          label: "Service",
+          sublabel: "",
+          shape: "rectangle",
+          icon: "none",
+          accent: null,
+          fontSize: Math.max(12, Math.round(canvas.height * 0.024)),
+          align: "center",
+          sourceKey: null,
+        },
+      };
+      return element;
+    }
+
     case "image": {
       const element: ImageElement = {
         id: createId("el"),
@@ -184,6 +222,8 @@ export const ELEMENT_LABELS: Record<ElementType, string> = {
   code: "Code",
   callout: "Callout",
   image: "Image",
+  node: "Node",
+  connector: "Connector",
 };
 
 /** A new animation of the given type, with sensible starting values. */
@@ -228,6 +268,17 @@ export function createAnimation(type: AnimationType): Animation {
         durationInFrames: 45,
         easing: "linear",
         staggerInFrames: 4,
+      };
+    case "flow":
+      return {
+        ...base,
+        type: "flow",
+        durationInFrames: 60,
+        easing: "linear",
+        markers: 1,
+        repeat: 2,
+        color: "#57D2E0",
+        size: 12,
       };
   }
 }

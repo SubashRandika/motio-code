@@ -3,10 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 
 import { getActiveSegments, type Timeline } from "@/core/animation";
-import type { Project } from "@/core/model";
+import { buildConnectorPath } from "@/core/diagram";
+import {
+  isConnector,
+  isNode,
+  type ConnectorElement,
+  type Project,
+  type SceneElement,
+} from "@/core/model";
 
+import { ConnectorLayer } from "./connector-layer";
 import { ElementView } from "./element-view";
-import { SelectionOverlay } from "./selection-overlay";
+import { SelectionOverlay, type SelectionBox } from "./selection-overlay";
 import { selectActiveScene } from "./store";
 import { useEditorStore } from "./store-provider";
 import { useCanvasInteraction } from "./use-canvas-interaction";
@@ -19,19 +27,15 @@ import { useCanvasInteraction } from "./use-canvas-interaction";
  * and at any export resolution. Selection chrome is drawn in display pixels on
  * top, so handles stay the same physical size as you zoom.
  */
-export function CanvasStage({
-  project,
-  timeline,
-  frame,
-}: {
-  project: Project;
-  timeline: Timeline;
-  frame: number;
-}) {
+export function CanvasStage({ timeline, frame }: { timeline: Timeline; frame: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
 
+  // The project comes from the store rather than a prop: the canvas reads both
+  // the scene graph and the selection, and two sources for the same data is how
+  // a stale render creeps in.
+  const project = useEditorStore((state) => state.project);
   const activeScene = useEditorStore(selectActiveScene);
   const selectedElementIds = useEditorStore((state) => state.selectedElementIds);
   const elements = activeScene?.data.elements ?? [];
@@ -64,7 +68,7 @@ export function CanvasStage({
   }, [project.canvas.width, project.canvas.height]);
 
   const active = getActiveSegments(timeline, frame);
-  const selectedElements = elements.filter((element) => selectedElementIds.includes(element.id));
+  const selectionBoxes = selectionBoxesFor(elements, selectedElementIds);
 
   return (
     <div
@@ -113,27 +117,23 @@ export function CanvasStage({
                   backgroundColor: scene.data.background ?? undefined,
                 }}
               >
-                {[...scene.data.elements]
-                  .sort((a, b) => a.layer - b.layer)
-                  .map((element) => (
-                    <ElementView
-                      key={element.id}
-                      element={element}
-                      frame={localFrame}
-                      sceneDurationInFrames={scene.durationInFrames}
-                      theme={project.theme}
-                    />
-                  ))}
+                <SceneElements
+                  elements={scene.data.elements}
+                  frame={localFrame}
+                  sceneDurationInFrames={scene.durationInFrames}
+                  project={project}
+                />
               </div>
             );
           })}
         </div>
 
         <SelectionOverlay
-          elements={selectedElements}
+          boxes={selectionBoxes}
           scale={scale}
           marquee={interaction.marquee}
           guides={interaction.guides}
+          pending={interaction.pending}
           canvasWidth={project.canvas.width}
           canvasHeight={project.canvas.height}
           dragging={interaction.dragging}
@@ -151,4 +151,118 @@ export function CanvasStage({
       ) : null}
     </div>
   );
+}
+
+interface PaintOrder {
+  /** Elements below the connector layer. */
+  behind: SceneElement[];
+  connectors: ConnectorElement[];
+  /** Elements above the connector layer, nodes among them. */
+  inFront: SceneElement[];
+}
+
+/**
+ * Splits a scene into paint order.
+ *
+ * All connectors share one SVG layer, inserted at the lowest layer any
+ * connector holds. Because a compiled diagram assigns connectors lower layers
+ * than its nodes, routes land behind the boxes they join -- which is what makes
+ * an arrow tuck under a node's edge instead of crossing it.
+ */
+export function paintOrder(elements: SceneElement[]): PaintOrder {
+  const sorted = [...elements].sort((a, b) => a.layer - b.layer);
+  const connectors = sorted.filter(isConnector);
+
+  if (connectors.length === 0) {
+    return { behind: sorted, connectors: [], inFront: [] };
+  }
+
+  const cut = connectors[0].layer;
+  return {
+    behind: sorted.filter((element) => !isConnector(element) && element.layer < cut),
+    connectors,
+    inFront: sorted.filter((element) => !isConnector(element) && element.layer >= cut),
+  };
+}
+
+function SceneElements({
+  elements,
+  frame,
+  sceneDurationInFrames,
+  project,
+}: {
+  elements: SceneElement[];
+  frame: number;
+  sceneDurationInFrames: number;
+  project: Project;
+}) {
+  const order = paintOrder(elements);
+
+  const paint = (element: SceneElement) => (
+    <ElementView
+      key={element.id}
+      element={element}
+      frame={frame}
+      sceneDurationInFrames={sceneDurationInFrames}
+      theme={project.theme}
+    />
+  );
+
+  return (
+    <>
+      {order.behind.map(paint)}
+      {order.connectors.length > 0 ? (
+        <ConnectorLayer
+          connectors={order.connectors}
+          elements={elements}
+          frame={frame}
+          sceneDurationInFrames={sceneDurationInFrames}
+          canvas={project.canvas}
+          theme={project.theme}
+        />
+      ) : null}
+      {order.inFront.map(paint)}
+    </>
+  );
+}
+
+/**
+ * Boxes for the selection overlay.
+ *
+ * A connector has no authored box -- its extent comes from the route between
+ * the nodes it joins -- so it is measured here rather than read from `rect`,
+ * which means a stale stored value can never draw a misplaced outline.
+ */
+export function selectionBoxesFor(
+  elements: SceneElement[],
+  selectedIds: string[],
+): SelectionBox[] {
+  const nodesById = new Map(elements.filter(isNode).map((node) => [node.id, node]));
+
+  return elements
+    .filter((element) => selectedIds.includes(element.id))
+    .flatMap((element): SelectionBox[] => {
+      if (!isConnector(element)) {
+        return [
+          {
+            id: element.id,
+            rect: element.rect,
+            resizable: !element.locked,
+            connectable: isNode(element) && !element.locked,
+          },
+        ];
+      }
+
+      const source = nodesById.get(element.content.sourceId);
+      const target = nodesById.get(element.content.targetId);
+      if (!source || !target) return [];
+
+      const path = buildConnectorPath(source.rect, target.rect, {
+        kind: element.content.kind,
+        sourceAnchor: element.content.sourceAnchor,
+        targetAnchor: element.content.targetAnchor,
+      });
+
+      return [{ id: element.id, rect: path.bbox, resizable: false, connectable: false }];
+    });
 }

@@ -26,6 +26,7 @@ a Remotion composition or a render worker without dragging the UI along.
 core/model/       Zod schemas + types: project, scene, element, animation, canvas, theme, export
 core/animation/   easing, interpolate, resolve (element -> render state), timeline (scenes -> frame axis)
 core/editing/     geometry (resize, snap, align, marquee) and history (bounded undo stack)
+core/diagram/     connector routing, layered layout, the Mermaid-subset parser, compile
 ```
 
 ## The timing model
@@ -190,6 +191,103 @@ An optional JSON view of the active scene, validated against the same
 validation leaves the text exactly as written and lists the failing paths, so
 nothing typed is lost. Changes made on the canvas flow back into the draft only
 while the draft is clean.
+
+## Diagrams
+
+### Why there is no React Flow
+
+AGENTS.md names React Flow "where appropriate". It is not appropriate here, for
+three reasons:
+
+1. **It cannot render inside a composition.** React Flow owns a viewport
+   transform and measures nodes through `ResizeObserver`. Neither is
+   frame-deterministic, so a headless render could not reproduce it. Using it for
+   editing and something else for export would mean two implementations of the
+   same picture, which is exactly the drift the frame model exists to prevent.
+2. **Two viewport models would fight.** The stage is a fixed design-resolution
+   surface scaled to fit. React Flow wants to own pan and zoom itself.
+3. **The work was already done.** `use-canvas-interaction` already does
+   hit-testing, multi-select, drag, resize, snap and marquee in canvas units.
+   Node editing is that same problem.
+
+So nodes and connectors are **ordinary scene elements**. They inherit selection,
+dragging, snapping, alignment, per-element timeline tracks, animations, undo and
+the properties panel for free, and they render in the same tree a Remotion
+composition will.
+
+### Nodes and connectors
+
+A `node` carries a label, shape, icon and accent. Its outline is inline SVG
+rather than CSS borders, because a diamond, hexagon or cylinder cannot be drawn
+with `border-radius` and a clip-path would throw the border away.
+
+A `connector` names two node ids. **Its geometry is derived, never authored** —
+`buildConnectorPath` routes it from the two boxes on every render, so a node can
+be dragged anywhere and nothing stored can go stale. Consequences:
+
+- Connectors are selectable but never draggable; their box is computed for the
+  selection outline rather than read from `rect`.
+- All connectors in a scene share one SVG, inserted at the lowest layer any
+  connector holds, so routes sit behind the boxes they join.
+- A connector cannot outlive its nodes: deletion prunes, duplication only copies
+  a route when both its nodes came along, and loading prunes again as defence
+  against a hand-edited scene.
+
+Routing produces an SVG path *and* a flattened polyline. The polyline is what
+lets a flow marker sit at a given progress with pure arithmetic instead of
+`getPointAtLength`, which would not work headlessly. A draw-on reveal uses
+`pathLength="1"` so the dash maths needs no measurement at all.
+
+### Connecting
+
+Four connect nubs appear *outside* a selected node's box, so they never compete
+with a resize handle for the same pixel. Dragging one and dropping on another
+node creates the connector. Hit-testing during that drag uses the stored rects,
+not the DOM, because the overlay sits above the stage. Selecting several nodes
+and pressing "Connect in order" is the keyboard path.
+
+### Text definitions
+
+MotioCode parses a **Mermaid subset itself** rather than depending on Mermaid.
+It needs the graph, not a picture of it: the nodes and edges become scene
+elements the animation engine already understands. Mermaid renders its own SVG
+through the DOM, which could not be animated per node or rendered to video.
+Borrowing the syntax gives users a format they know at no bundle cost.
+
+The authoritative rule, stated in the panel itself:
+
+> **Text owns the structure. The canvas owns the positions.**
+
+Applying text adds, removes and relabels nodes and routes, matching existing
+ones by the `sourceKey` each node remembers. It places a node only the first time
+that node appears, so a layout arranged by hand survives later edits. Positions
+are never written back into the text, which is why applying is an explicit
+action rather than something that happens as you type. Duplicating a node clears
+its `sourceKey`, because the copy is no longer the one the text defined.
+
+Layout is a deterministic layered ranking — longest path from a root, relaxed so
+a cycle degrades instead of failing. It is the minimum needed to draw a graph
+that was written rather than arranged; crossing minimisation and the rest belong
+to a later phase. Node sizes are measured arithmetically, never from the DOM, so
+layout is identical in a test, on a server and in a browser.
+
+Errors are reported per line and block applying; syntax MotioCode does not model
+(`subgraph`, `classDef`, …) warns and is skipped rather than failing the whole
+definition.
+
+## Schema evolution
+
+Stored scenes outlive the code that wrote them. Two rules:
+
+- A new field on an existing schema must carry a default, so an older row still
+  parses. `tests/core/backward-compatibility.test.ts` pins a real pre-diagram
+  scene verbatim and fails if that stops being true.
+- A new element kind is additive to the `sceneElementSchema` union, and nothing
+  else in the engine changes.
+
+A connector is excluded from `createElement`'s input type rather than left as a
+branch that could only produce an invalid element — it is drawn between two
+existing nodes, never added from the rail.
 
 ## Design system
 

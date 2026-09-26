@@ -12,6 +12,8 @@ import { applyEasing, clamp01 } from "./easing";
  * - `scale` multiplies.
  * - `highlight` takes the strongest active highlight.
  * - `revealProgress` takes the most restrictive (smallest) value.
+ * - `flow` takes the last one declared; two markers on one route would just
+ *   obscure each other, so the most recent wins rather than compounding.
  *
  * Outside an animation's window the element holds that animation's start value
  * (before) or end value (after), so state is defined at every frame.
@@ -27,6 +29,14 @@ export interface ElementRenderState {
   revealProgress: number;
   /** Frames between consecutive parts of a progressive reveal. */
   revealStaggerInFrames: number;
+  /** Marker travelling a diagram connector, if one is running. */
+  flow: {
+    /** 0-1 along the route, within the current traversal. */
+    progress: number;
+    markers: number;
+    color: string;
+    size: number;
+  } | null;
 }
 
 const IDENTITY: ElementRenderState = {
@@ -38,6 +48,7 @@ const IDENTITY: ElementRenderState = {
   highlight: null,
   revealProgress: 1,
   revealStaggerInFrames: 0,
+  flow: null,
 };
 
 /** Last frame of an element, exclusive. `null` duration runs to the scene end. */
@@ -79,6 +90,24 @@ export function animationWindow(
 }
 
 /**
+ * Un-eased 0-1 position within an animation's window.
+ *
+ * Separate from `animationProgress` because a repeating animation has to divide
+ * linear window time into cycles *before* any easing is applied -- easing the
+ * window first would make every cycle a different length.
+ */
+export function animationRawProgress(
+  animation: Animation,
+  element: SceneElement,
+  sceneFrame: number,
+  sceneDurationInFrames: number,
+): number {
+  const { start, end } = animationWindow(animation, element, sceneDurationInFrames);
+  const span = end - start;
+  return span <= 0 ? (sceneFrame < start ? 0 : 1) : clamp01((sceneFrame - start) / span);
+}
+
+/**
  * Eased 0-1 progress for an animation at a scene-local frame.
  *
  * Exit animations run the same curve in reverse, so a preset written as
@@ -90,9 +119,7 @@ export function animationProgress(
   sceneFrame: number,
   sceneDurationInFrames: number,
 ): number {
-  const { start, end } = animationWindow(animation, element, sceneDurationInFrames);
-  const span = end - start;
-  const raw = span <= 0 ? (sceneFrame < start ? 0 : 1) : clamp01((sceneFrame - start) / span);
+  const raw = animationRawProgress(animation, element, sceneFrame, sceneDurationInFrames);
   const eased = applyEasing(raw, animation.easing);
   return animation.trigger === "exit" ? 1 - eased : eased;
 }
@@ -167,6 +194,20 @@ export function resolveElementState(
           state.revealStaggerInFrames,
           animation.staggerInFrames,
         );
+        break;
+      }
+      case "flow": {
+        // Divide the window into equal traversals, then ease within each one.
+        const raw = animationRawProgress(animation, element, sceneFrame, sceneDurationInFrames);
+        const scaled = raw * animation.repeat;
+        const cycle = raw >= 1 ? 1 : scaled - Math.floor(scaled);
+
+        state.flow = {
+          progress: applyEasing(cycle, animation.easing),
+          markers: animation.markers,
+          color: animation.color,
+          size: animation.size,
+        };
         break;
       }
     }

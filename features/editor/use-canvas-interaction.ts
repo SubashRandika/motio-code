@@ -12,7 +12,16 @@ import {
   type ResizeHandle,
   type SnapGuide,
 } from "@/core/editing";
-import type { CanvasConfig, Rect, SceneElement } from "@/core/model";
+import { anchorPoint } from "@/core/diagram";
+import {
+  isNode,
+  type CanvasConfig,
+  type NodeSide,
+  type Rect,
+  type SceneElement,
+} from "@/core/model";
+
+import type { PendingConnection } from "./selection-overlay";
 
 import { useEditorStore } from "./store-provider";
 
@@ -39,7 +48,8 @@ type Gesture =
       startRect: Rect;
       undoKey: string;
     }
-  | { kind: "marquee"; originX: number; originY: number; additive: boolean };
+  | { kind: "marquee"; originX: number; originY: number; additive: boolean }
+  | { kind: "connect"; sourceId: string; sourceSide: NodeSide };
 
 export interface CanvasInteraction {
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
@@ -48,6 +58,8 @@ export interface CanvasInteraction {
   /** Marquee rect in canvas units, while one is being dragged. */
   marquee: Rect | null;
   guides: SnapGuide[];
+  /** The connector being drawn, while a nub is being dragged. */
+  pending: PendingConnection | null;
   dragging: boolean;
 }
 
@@ -75,8 +87,10 @@ export function useCanvasInteraction({
   const selectElement = useEditorStore((state) => state.selectElement);
   const selectElements = useEditorStore((state) => state.selectElements);
   const setElementRects = useEditorStore((state) => state.setElementRects);
+  const connectNodes = useEditorStore((state) => state.connectNodes);
 
   const gesture = useRef<Gesture>({ kind: "idle" });
+  const [pending, setPending] = useState<PendingConnection | null>(null);
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [guides, setGuides] = useState<SnapGuide[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -93,6 +107,27 @@ export function useCanvasInteraction({
     [scale, stageRef],
   );
 
+  /**
+   * Topmost node under a canvas point. Uses the stored rects rather than the
+   * DOM, because during a connect drag the overlay sits above the stage and
+   * would swallow an `elementFromPoint` hit.
+   */
+  const nodeAt = useCallback(
+    (point: { x: number; y: number }, excludeId?: string) =>
+      [...elements]
+        .filter(isNode)
+        .filter((node) => node.id !== excludeId && !node.hidden)
+        .sort((a, b) => b.layer - a.layer)
+        .find(
+          (node) =>
+            point.x >= node.rect.x &&
+            point.x <= node.rect.x + node.rect.width &&
+            point.y >= node.rect.y &&
+            point.y <= node.rect.y + node.rect.height,
+        ) ?? null,
+    [elements],
+  );
+
   const onPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
@@ -101,7 +136,22 @@ export function useCanvasInteraction({
       const point = toCanvasPoint(event.clientX, event.clientY);
       event.currentTarget.setPointerCapture(event.pointerId);
 
-      // 1. A resize handle takes priority over everything beneath it.
+      // 1. A connect nub starts drawing a connector.
+      const nubEl = target.closest<HTMLElement>("[data-connect-nub]");
+      if (nubEl) {
+        const sourceSide = nubEl.dataset.connectNub as NodeSide;
+        const sourceId = nubEl.dataset.connectSource ?? "";
+        const source = elements.find((item) => item.id === sourceId);
+
+        if (source && isNode(source)) {
+          gesture.current = { kind: "connect", sourceId, sourceSide };
+          setPending({ from: anchorPoint(source.rect, sourceSide), to: point, targetRect: null });
+          setDragging(true);
+        }
+        return;
+      }
+
+      // 2. A resize handle takes priority over everything beneath it.
       const handleEl = target.closest<HTMLElement>("[data-resize-handle]");
       if (handleEl) {
         const handle = handleEl.dataset.resizeHandle as ResizeHandle;
@@ -122,10 +172,18 @@ export function useCanvasInteraction({
         return;
       }
 
-      // 2. An element under the pointer starts a move.
+      // 3. An element under the pointer starts a move.
       const elementEl = target.closest<HTMLElement>("[data-element-id]");
       const elementId = elementEl?.dataset.elementId;
       const element = elementId ? elements.find((item) => item.id === elementId) : undefined;
+
+      // A connector has no box of its own: it is selectable, but it follows the
+      // nodes it joins rather than being dragged.
+      if (element && element.type === "connector") {
+        selectElement(element.id, { additive: event.shiftKey });
+        gesture.current = { kind: "idle" };
+        return;
+      }
 
       if (element && !element.locked) {
         const alreadySelected = selectedElementIds.includes(element.id);
@@ -143,7 +201,9 @@ export function useCanvasInteraction({
 
         const startRects = new Map(
           elements
-            .filter((item) => ids.includes(item.id) && !item.locked)
+            .filter(
+              (item) => ids.includes(item.id) && !item.locked && item.type !== "connector",
+            )
             .map((item) => [item.id, item.rect] as const),
         );
 
@@ -162,7 +222,7 @@ export function useCanvasInteraction({
         return;
       }
 
-      // 3. Empty canvas starts a marquee.
+      // 4. Empty canvas starts a marquee.
       if (!event.shiftKey) selectElement(null);
       gesture.current = {
         kind: "marquee",
@@ -250,11 +310,24 @@ export function useCanvasInteraction({
         return;
       }
 
+      if (current.kind === "connect") {
+        const source = elements.find((item) => item.id === current.sourceId);
+        if (!source) return;
+
+        const hovered = nodeAt(point, current.sourceId);
+        setPending({
+          from: anchorPoint(source.rect, current.sourceSide),
+          to: point,
+          targetRect: hovered?.rect ?? null,
+        });
+        return;
+      }
+
       if (current.kind === "marquee") {
         setMarquee(rectFromPoints(current.originX, current.originY, point.x, point.y));
       }
     },
-    [canvas, elements, setElementRects, toCanvasPoint],
+    [canvas, elements, nodeAt, setElementRects, toCanvasPoint],
   );
 
   const onPointerUp = useCallback(
@@ -271,7 +344,17 @@ export function useCanvasInteraction({
         );
       }
 
+      if (current.kind === "connect") {
+        const point = toCanvasPoint(event.clientX, event.clientY);
+        const targetNode = nodeAt(point, current.sourceId);
+
+        if (targetNode) {
+          connectNodes(current.sourceId, targetNode.id, { source: current.sourceSide });
+        }
+      }
+
       gesture.current = { kind: "idle" };
+      setPending(null);
       setMarquee(null);
       setGuides([]);
       setDragging(false);
@@ -280,8 +363,8 @@ export function useCanvasInteraction({
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
     },
-    [elements, marquee, selectElements, selectedElementIds],
+    [connectNodes, elements, marquee, nodeAt, selectElements, selectedElementIds, toCanvasPoint],
   );
 
-  return { onPointerDown, onPointerMove, onPointerUp, marquee, guides, dragging };
+  return { onPointerDown, onPointerMove, onPointerUp, marquee, guides, pending, dragging };
 }

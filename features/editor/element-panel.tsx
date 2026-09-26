@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  ArrowRight,
+  Box,
   ChevronDown,
   ChevronUp,
   Code2,
@@ -14,7 +16,7 @@ import {
   Unlock,
 } from "lucide-react";
 
-import { ELEMENT_LABELS, type ElementType } from "@/core/model";
+import { ADDABLE_ELEMENT_TYPES, ELEMENT_LABELS, type ElementType } from "@/core/model";
 import { cn } from "@/lib/utils/cn";
 
 import { selectActiveScene } from "./store";
@@ -26,9 +28,9 @@ const ELEMENT_ICONS: Record<ElementType, typeof Type> = {
   code: Code2,
   callout: MessageSquare,
   image: ImageIcon,
+  node: Box,
+  connector: ArrowRight,
 };
-
-const RAIL_ORDER: ElementType[] = ["text", "code", "shape", "callout", "image"];
 
 export function ElementRail() {
   const addElement = useEditorStore((state) => state.addElement);
@@ -40,7 +42,7 @@ export function ElementRail() {
       </h2>
 
       <div className="grid grid-cols-3 gap-1.5 px-2 pb-3">
-        {RAIL_ORDER.map((type) => {
+        {ADDABLE_ELEMENT_TYPES.map((type) => {
           const Icon = ELEMENT_ICONS[type];
           return (
             <button

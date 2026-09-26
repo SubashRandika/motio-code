@@ -1,3 +1,4 @@
+import { pruneDanglingConnectors } from "@/core/diagram";
 import {
   canvasConfigSchema,
   exportConfigSchema,
@@ -60,7 +61,10 @@ export function rowToProjectMeta(row: ProjectRow): ProjectMeta {
 }
 
 export function rowToSceneData(value: unknown): SceneData {
-  return parseOrDefault(sceneDataSchema, value, sceneDataSchema.parse({}));
+  const data = parseOrDefault(sceneDataSchema, value, sceneDataSchema.parse({}));
+  // Defence in depth: a scene edited through the configuration panel, or saved
+  // by an older build, could name a connector endpoint that no longer exists.
+  return { ...data, elements: pruneDanglingConnectors(data.elements) };
 }
 
 export function rowToScene(row: SceneRow): Scene {

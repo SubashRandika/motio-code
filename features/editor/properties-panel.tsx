@@ -7,6 +7,7 @@ import {
   AlignEndVertical,
   AlignStartHorizontal,
   AlignStartVertical,
+  ArrowRight,
   Copy,
   Trash2,
 } from "lucide-react";
@@ -64,7 +65,12 @@ export function PropertiesPanel() {
 
   return (
     <div className="flex flex-col divide-y divide-line">
-      {selected.length > 1 ? <MultiSelection count={selected.length} /> : null}
+      {selected.length > 1 ? (
+        <MultiSelection
+          count={selected.length}
+          nodeCount={selected.filter((element) => element.type === "node").length}
+        />
+      ) : null}
 
       {selected.length === 1 ? (
         <ElementProperties
@@ -83,13 +89,25 @@ export function PropertiesPanel() {
   );
 }
 
-function MultiSelection({ count }: { count: number }) {
+function MultiSelection({ count, nodeCount }: { count: number; nodeCount: number }) {
   const alignSelection = useEditorStore((state) => state.alignSelection);
   const duplicateSelection = useEditorStore((state) => state.duplicateSelection);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
+  const connectSelection = useEditorStore((state) => state.connectSelection);
 
   return (
     <Section title={`${count} elements selected`}>
+      {nodeCount > 1 ? (
+        <button
+          type="button"
+          onClick={connectSelection}
+          className="flex items-center justify-center gap-1.5 rounded border border-cyan-deep/50 bg-cyan-wash py-1.5 text-[12px] text-cyan transition-colors hover:border-cyan"
+        >
+          <ArrowRight className="size-3" />
+          Connect {nodeCount} nodes in order
+        </button>
+      ) : null}
+
       <div className="grid grid-cols-6 gap-1">
         {ALIGN_BUTTONS.map(({ alignment, label, icon: Icon }) => (
           <button

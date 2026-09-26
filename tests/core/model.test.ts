@@ -62,6 +62,7 @@ describe("sceneDataSchema", () => {
       transition: null,
       background: null,
       notes: "",
+      diagram: null,
     });
   });
 

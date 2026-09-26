@@ -1,9 +1,9 @@
 "use client";
 
 import { RESIZE_HANDLES, boundingRect, type ResizeHandle, type SnapGuide } from "@/core/editing";
-import type { Rect, SceneElement } from "@/core/model";
+import { NODE_SIDES, type NodeSide, type Rect } from "@/core/model";
 
-/** Where each handle sits on the element's box, as a 0-1 fraction. */
+/** Where each resize handle sits on the box, as a 0-1 fraction. */
 const HANDLE_POSITION: Record<ResizeHandle, { x: number; y: number; cursor: string }> = {
   nw: { x: 0, y: 0, cursor: "nwse-resize" },
   n: { x: 0.5, y: 0, cursor: "ns-resize" },
@@ -15,33 +15,59 @@ const HANDLE_POSITION: Record<ResizeHandle, { x: number; y: number; cursor: stri
   w: { x: 0, y: 0.5, cursor: "ew-resize" },
 };
 
+const NUB_POSITION: Record<NodeSide, { x: number; y: number }> = {
+  top: { x: 0.5, y: 0 },
+  right: { x: 1, y: 0.5 },
+  bottom: { x: 0.5, y: 1 },
+  left: { x: 0, y: 0.5 },
+};
+
+/** How far outside the box a connect nub sits, in display pixels. */
+const NUB_OFFSET = 15;
+
+export interface SelectionBox {
+  id: string;
+  /** In canvas units. Derived from its endpoints for a connector. */
+  rect: Rect;
+  resizable: boolean;
+  connectable: boolean;
+}
+
+export interface PendingConnection {
+  /** Canvas units. */
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  /** The node the pointer is currently over, if any. */
+  targetRect: Rect | null;
+}
+
 /**
  * Selection chrome, drawn in display pixels on top of the scaled stage.
  *
- * Keeping it out of the scaled layer is what keeps handles and outlines the
- * same physical size at every zoom level.
+ * Keeping it out of the scaled layer is what keeps handles, nubs and outlines
+ * the same physical size at every zoom level.
  */
 export function SelectionOverlay({
-  elements,
+  boxes,
   scale,
   marquee,
   guides,
+  pending,
   canvasWidth,
   canvasHeight,
   dragging,
 }: {
-  elements: SceneElement[];
+  boxes: SelectionBox[];
   scale: number;
   marquee: Rect | null;
   guides: SnapGuide[];
+  pending: PendingConnection | null;
   canvasWidth: number;
   canvasHeight: number;
   dragging: boolean;
 }) {
-  const bounds = boundingRect(elements.map((element) => element.rect));
-  const single = elements.length === 1 ? elements[0] : null;
-  // Handles belong to a single element; a multi-selection shows its extent only.
-  const handleTarget = single && !single.locked ? single : null;
+  const bounds = boundingRect(boxes.map((box) => box.rect));
+  const single = boxes.length === 1 ? boxes[0] : null;
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -57,20 +83,20 @@ export function SelectionOverlay({
         />
       ))}
 
-      {elements.map((element) => (
+      {boxes.map((box) => (
         <div
-          key={element.id}
+          key={box.id}
           className="absolute border border-amber"
           style={{
-            left: element.rect.x * scale,
-            top: element.rect.y * scale,
-            width: element.rect.width * scale,
-            height: element.rect.height * scale,
+            left: box.rect.x * scale,
+            top: box.rect.y * scale,
+            width: box.rect.width * scale,
+            height: box.rect.height * scale,
           }}
         />
       ))}
 
-      {bounds && elements.length > 1 ? (
+      {bounds && boxes.length > 1 ? (
         <div
           className="absolute border border-dashed border-amber/50"
           style={{
@@ -82,15 +108,15 @@ export function SelectionOverlay({
         />
       ) : null}
 
-      {handleTarget && !dragging
+      {single?.resizable && !dragging
         ? RESIZE_HANDLES.map((handle) => {
             const position = HANDLE_POSITION[handle];
-            const { rect } = handleTarget;
+            const { rect } = single;
             return (
               <div
                 key={handle}
                 data-resize-handle={handle}
-                data-resize-target={handleTarget.id}
+                data-resize-target={single.id}
                 role="presentation"
                 className="pointer-events-auto absolute size-2.5 rounded-[2px] border border-ink bg-amber"
                 style={{
@@ -102,6 +128,64 @@ export function SelectionOverlay({
             );
           })
         : null}
+
+      {/* Connect nubs sit *outside* the box so they never compete with a resize
+          handle for the same pixel. */}
+      {single?.connectable && !dragging
+        ? NODE_SIDES.map((side) => {
+            const position = NUB_POSITION[side];
+            const { rect } = single;
+            const offsetX = side === "left" ? -NUB_OFFSET : side === "right" ? NUB_OFFSET : 0;
+            const offsetY = side === "top" ? -NUB_OFFSET : side === "bottom" ? NUB_OFFSET : 0;
+
+            return (
+              <div
+                key={side}
+                data-connect-nub={side}
+                data-connect-source={single.id}
+                role="presentation"
+                title={`Drag to connect from the ${side}`}
+                className="pointer-events-auto absolute size-3 cursor-crosshair rounded-full border-2 border-ink bg-cyan"
+                style={{
+                  left: (rect.x + rect.width * position.x) * scale - 6 + offsetX,
+                  top: (rect.y + rect.height * position.y) * scale - 6 + offsetY,
+                }}
+              />
+            );
+          })
+        : null}
+
+      {pending ? (
+        <>
+          <svg
+            className="absolute inset-0 overflow-visible"
+            width={canvasWidth * scale}
+            height={canvasHeight * scale}
+          >
+            <line
+              x1={pending.from.x * scale}
+              y1={pending.from.y * scale}
+              x2={pending.to.x * scale}
+              y2={pending.to.y * scale}
+              stroke="var(--color-cyan)"
+              strokeWidth={2}
+              strokeDasharray="5 4"
+            />
+          </svg>
+
+          {pending.targetRect ? (
+            <div
+              className="absolute border-2 border-cyan bg-cyan/10"
+              style={{
+                left: pending.targetRect.x * scale,
+                top: pending.targetRect.y * scale,
+                width: pending.targetRect.width * scale,
+                height: pending.targetRect.height * scale,
+              }}
+            />
+          ) : null}
+        </>
+      ) : null}
 
       {marquee ? (
         <div

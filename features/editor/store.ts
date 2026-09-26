@@ -12,16 +12,26 @@ import {
   type History,
 } from "@/core/editing";
 import {
+  compileDiagram,
+  parseDiagramSource,
+  pruneDanglingConnectors,
+  type DiagramParseIssue,
+} from "@/core/diagram";
+import {
   DEFAULT_SCENE_DURATION_IN_FRAMES,
   EMPTY_SCENE_DATA,
   createAnimation,
   createElement,
   createUuid,
+  elementStyleSchema,
+  isConnector,
+  isNode,
   type Animation,
+  type ConnectorAnchor,
   type AnimationType,
   type CanvasConfig,
+  type AddableElementType,
   type ElementStyle,
-  type ElementType,
   type ExportConfig,
   type Project,
   type Rect,
@@ -51,7 +61,7 @@ interface EditorState {
   saveError: string | null;
 
   /** Panel visibility. */
-  panels: { left: boolean; right: boolean; config: boolean };
+  panels: { left: boolean; right: boolean; config: boolean; diagram: boolean };
 }
 
 export interface EditOptions {
@@ -81,7 +91,7 @@ interface EditorActions {
   setSceneTransition: (sceneId: string, transition: Transition | null) => void;
   replaceSceneData: (sceneId: string, data: SceneData) => void;
 
-  addElement: (type: ElementType) => void;
+  addElement: (type: AddableElementType) => void;
   updateElement: (
     elementId: string,
     updater: (element: SceneElement) => SceneElement,
@@ -100,6 +110,19 @@ interface EditorActions {
   duplicateSelection: () => void;
   deleteSelection: () => void;
 
+  /** Draws a connector between two nodes. */
+  connectNodes: (
+    sourceId: string,
+    targetId: string,
+    anchors?: { source?: ConnectorAnchor; target?: ConnectorAnchor },
+  ) => void;
+  /** Connects the selected nodes in selection order. Keyboard path for connecting. */
+  connectSelection: () => void;
+  /** Stores the diagram text without compiling it. */
+  setDiagramSource: (sceneId: string, source: string) => void;
+  /** Compiles the diagram text into nodes and connectors. */
+  applyDiagramSource: (sceneId: string, source: string) => DiagramParseIssue[];
+
   addAnimation: (elementId: string, type: AnimationType) => void;
   updateAnimation: (
     elementId: string,
@@ -112,7 +135,7 @@ interface EditorActions {
   undo: () => void;
   redo: () => void;
 
-  togglePanel: (panel: "left" | "right" | "config") => void;
+  togglePanel: (panel: "left" | "right" | "config" | "diagram") => void;
 
   beginSave: () => void;
   saveSucceeded: (savedAt: string) => void;
@@ -197,7 +220,7 @@ export function createEditorStore(project: Project) {
       status: "idle",
       lastSavedAt: null,
       saveError: null,
-      panels: { left: true, right: true, config: false },
+      panels: { left: true, right: true, config: false, diagram: false },
 
       // ------------------------------------------------------------ selection
       selectScene: (sceneId) => set({ selectedSceneId: sceneId, selectedElementIds: [] }),
@@ -503,14 +526,43 @@ export function createEditorStore(project: Project) {
         const scene = selectActiveScene(state);
         if (!scene || state.selectedElementIds.length === 0) return;
 
-        const copies = scene.data.elements
-          .filter((element) => state.selectedElementIds.includes(element.id))
-          .map((element) => ({
+        const selected = scene.data.elements.filter((element) =>
+          state.selectedElementIds.includes(element.id),
+        );
+
+        // Copy nodes first so connectors can be repointed at the new ids.
+        const idMap = new Map<string, string>(selected.map((element) => [element.id, createUuid()]));
+
+        const copies = selected.flatMap((element): SceneElement[] => {
+          const copy = {
             ...structuredClone(element),
-            id: createUuid(),
+            id: idMap.get(element.id)!,
             name: `${element.name} copy`.slice(0, 120),
             rect: { ...element.rect, x: element.rect.x + 24, y: element.rect.y + 24 },
-          }));
+          };
+
+          if (!isConnector(copy)) {
+            // A duplicated node is no longer the one the text defined.
+            if (isNode(copy)) {
+              return [{ ...copy, content: { ...copy.content, sourceKey: null } }];
+            }
+            return [copy];
+          }
+
+          const sourceId = idMap.get(copy.content.sourceId);
+          const targetId = idMap.get(copy.content.targetId);
+          // Only copy a connector when both of its nodes came along; otherwise
+          // the copy would silently re-attach to the originals.
+          if (!sourceId || !targetId) return [];
+
+          return [
+            {
+              ...copy,
+              rect: element.rect,
+              content: { ...copy.content, sourceId, targetId },
+            },
+          ];
+        });
 
         edit("Duplicate elements", (current) =>
           withElements(current, scene.id, (elements) => relayer([...elements, ...copies])),
@@ -525,11 +577,147 @@ export function createEditorStore(project: Project) {
 
         edit("Delete elements", (current) =>
           withElements(current, activeSceneId(), (elements) =>
-            relayer(elements.filter((element) => !selectedElementIds.includes(element.id))),
+            // A connector cannot outlive the nodes it joins.
+            relayer(
+              pruneDanglingConnectors(
+                elements.filter((element) => !selectedElementIds.includes(element.id)),
+              ),
+            ),
           ),
         );
 
         set({ selectedElementIds: [] });
+      },
+
+      // -------------------------------------------------------------- diagram
+      connectNodes: (sourceId, targetId, anchors) => {
+        const state = get();
+        const scene = selectActiveScene(state);
+        if (!scene || sourceId === targetId) return;
+
+        const nodes = scene.data.elements.filter(isNode);
+        if (!nodes.some((node) => node.id === sourceId)) return;
+        if (!nodes.some((node) => node.id === targetId)) return;
+
+        // One connector per ordered pair; drawing the same link twice is almost
+        // always a slip, and two identical routes are indistinguishable.
+        const alreadyJoined = scene.data.elements
+          .filter(isConnector)
+          .some(
+            (connector) =>
+              connector.content.sourceId === sourceId &&
+              connector.content.targetId === targetId,
+          );
+        if (alreadyJoined) return;
+
+        const source = nodes.find((node) => node.id === sourceId)!;
+        const target = nodes.find((node) => node.id === targetId)!;
+
+        const connector: SceneElement = {
+          id: createUuid(),
+          name: `${source.content.label} to ${target.content.label}`.slice(0, 120),
+          type: "connector",
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          layer: 0,
+          from: 0,
+          durationInFrames: null,
+          locked: false,
+          hidden: false,
+          style: {
+            ...elementStyleSchema.parse({}),
+            stroke: state.project.theme.muted,
+            strokeWidth: 2,
+          },
+          animations: [],
+          content: {
+            sourceId,
+            targetId,
+            sourceAnchor: anchors?.source ?? "auto",
+            targetAnchor: anchors?.target ?? "auto",
+            kind: "orthogonal",
+            label: "",
+            startArrow: false,
+            endArrow: true,
+            dashed: false,
+            thickness: 2,
+          },
+        };
+
+        edit("Connect nodes", (current) =>
+          withElements(current, scene.id, (elements) =>
+            // Connectors go to the back of the stack so routes sit behind boxes.
+            assignLayers([connector, ...elements]),
+          ),
+        );
+
+        set({ selectedElementIds: [connector.id] });
+      },
+
+      connectSelection: () => {
+        const state = get();
+        const scene = selectActiveScene(state);
+        if (!scene) return;
+
+        const selectedNodes = state.selectedElementIds
+          .map((id) => scene.data.elements.find((element) => element.id === id))
+          .filter((element): element is SceneElement => element !== undefined)
+          .filter(isNode);
+
+        // Chain them in the order they were selected.
+        for (let i = 1; i < selectedNodes.length; i += 1) {
+          get().connectNodes(selectedNodes[i - 1].id, selectedNodes[i].id);
+        }
+      },
+
+      setDiagramSource: (sceneId, source) =>
+        edit(
+          "Edit diagram text",
+          (current) =>
+            withScene(current, sceneId, (scene) => ({
+              ...scene,
+              data: {
+                ...scene.data,
+                diagram: { source, appliedAt: scene.data.diagram?.appliedAt ?? null },
+              },
+            })),
+          { coalesceKey: `diagram-source:${sceneId}` },
+        ),
+
+      applyDiagramSource: (sceneId, source) => {
+        const state = get();
+        const scene = state.project.scenes.find((item) => item.id === sceneId);
+        if (!scene) return [];
+
+        const parsed = parseDiagramSource(source);
+        if (!parsed.ok) return parsed.issues;
+
+        const { nodes, connectors } = compileDiagram(parsed.diagram, {
+          canvas: state.project.canvas,
+          theme: state.project.theme,
+          existing: scene.data.elements,
+        });
+
+        edit("Apply diagram", (current) =>
+          withScene(current, sceneId, (item) => {
+            // Everything that is not part of the diagram keeps its order and
+            // stays underneath it.
+            const others = [...item.data.elements]
+              .filter((element) => !isNode(element) && !isConnector(element))
+              .sort((a, b) => a.layer - b.layer);
+
+            return {
+              ...item,
+              data: {
+                ...item.data,
+                elements: assignLayers([...others, ...connectors, ...nodes]),
+                diagram: { source, appliedAt: new Date().toISOString() },
+              },
+            };
+          }),
+        );
+
+        set({ selectedElementIds: [] });
+        return parsed.issues;
       },
 
       // ----------------------------------------------------------- animations

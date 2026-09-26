@@ -5,14 +5,22 @@ import { ArrowDown, ArrowDownToLine, ArrowUp, ArrowUpToLine, Copy, Trash2 } from
 import { Label, Textarea } from "@/components/ui/field";
 import {
   CODE_LANGUAGES,
+  CONNECTOR_ANCHORS,
+  CONNECTOR_KINDS,
+  DIAGRAM_NODE_SHAPES,
+  NODE_ICONS,
+  isNode,
   type CalloutElement,
   type CodeElement,
+  type ConnectorElement,
   type ImageElement,
+  type NodeElement,
   type SceneElement,
   type ShapeElement,
   type TextElement,
 } from "@/core/model";
 
+import { selectActiveScene } from "../store";
 import { useEditorStore } from "../store-provider";
 import { AnimationEditor } from "./animation-editor";
 import {
@@ -117,6 +125,7 @@ export function ElementProperties({
       </Section>
 
       {/* -------------------------------------------------------- transform */}
+      {element.type === "connector" ? null : (
       <Section title="Position and size">
         <Row>
           <NumberField label="X" value={element.rect.x} onChange={(x) => setRect({ x }, "x")} />
@@ -137,6 +146,7 @@ export function ElementProperties({
           />
         </Row>
       </Section>
+      )}
 
       {/* ----------------------------------------------------------- timing */}
       <Section title="Timing">
@@ -185,6 +195,16 @@ export function ElementProperties({
 
       {/* ------------------------------------------------------------ style */}
       <Section title="Style">
+        {element.type === "connector" ? (
+          <ColorField
+            label="Line colour"
+            value={element.style.stroke}
+            onChange={(stroke) =>
+              setElementStyle(element.id, { stroke }, { coalesceKey: `stroke:${element.id}` })
+            }
+          />
+        ) : (
+          <>
         <ColorField
           label="Fill"
           value={element.style.fill}
@@ -255,6 +275,8 @@ export function ElementProperties({
           checked={element.style.shadow}
           onChange={(shadow) => setElementStyle(element.id, { shadow })}
         />
+          </>
+        )}
       </Section>
 
       <AnimationEditor element={element} fps={fps} />
@@ -276,7 +298,177 @@ function ContentFields({ element }: { element: SceneElement }) {
       return <CalloutContent element={element} />;
     case "image":
       return <ImageContent element={element} />;
+    case "node":
+      return <NodeContent element={element} />;
+    case "connector":
+      return <ConnectorContent element={element} />;
   }
+}
+
+function NodeContent({ element }: { element: NodeElement }) {
+  const updateElement = useEditorStore((state) => state.updateElement);
+
+  const patch = (changes: Partial<NodeElement["content"]>, key: string) =>
+    updateElement(
+      element.id,
+      (item) =>
+        item.type === "node" ? { ...item, content: { ...item.content, ...changes } } : item,
+      { coalesceKey: `node:${element.id}:${key}`, label: "Edit node" },
+    );
+
+  return (
+    <Section title="Node">
+      <TextField
+        label="Label"
+        value={element.content.label}
+        maxLength={200}
+        onChange={(label) => patch({ label }, "label")}
+      />
+
+      <TextField
+        label="Detail"
+        value={element.content.sublabel}
+        maxLength={200}
+        placeholder="Optional second line"
+        onChange={(sublabel) => patch({ sublabel }, "sublabel")}
+      />
+
+      <Row>
+        <SelectField
+          label="Shape"
+          value={element.content.shape}
+          options={DIAGRAM_NODE_SHAPES.map((shape) => ({ value: shape, label: shape }))}
+          onChange={(shape) => patch({ shape }, "shape")}
+        />
+        <SelectField
+          label="Icon"
+          value={element.content.icon}
+          options={NODE_ICONS.map((icon) => ({ value: icon, label: icon }))}
+          onChange={(icon) => patch({ icon }, "icon")}
+        />
+      </Row>
+
+      <Row>
+        <NumberField
+          label="Text size"
+          value={element.content.fontSize}
+          min={8}
+          max={200}
+          onChange={(fontSize) => patch({ fontSize }, "fontSize")}
+        />
+        <SelectField
+          label="Align"
+          value={element.content.align}
+          options={[
+            { value: "left" as const, label: "Left" },
+            { value: "center" as const, label: "Center" },
+            { value: "right" as const, label: "Right" },
+          ]}
+          onChange={(align) => patch({ align }, "align")}
+        />
+      </Row>
+
+      <ColorField
+        label="Accent"
+        value={element.content.accent}
+        allowNone
+        onChange={(accent) => patch({ accent }, "accent")}
+      />
+
+      {element.content.sourceKey ? (
+        <p className="text-[11.5px] leading-relaxed text-mist-dim">
+          Defined in the diagram text as{" "}
+          <span className="tabular text-mist">{element.content.sourceKey}</span>. Re-applying the
+          text keeps this position.
+        </p>
+      ) : null}
+    </Section>
+  );
+}
+
+function ConnectorContent({ element }: { element: ConnectorElement }) {
+  const updateElement = useEditorStore((state) => state.updateElement);
+  const scene = useEditorStore(selectActiveScene);
+
+  const patch = (changes: Partial<ConnectorElement["content"]>, key: string) =>
+    updateElement(
+      element.id,
+      (item) =>
+        item.type === "connector" ? { ...item, content: { ...item.content, ...changes } } : item,
+      { coalesceKey: `connector:${element.id}:${key}`, label: "Edit connector" },
+    );
+
+  const nameOf = (id: string) => {
+    const node = scene?.data.elements.find((item) => item.id === id);
+    return node && isNode(node) ? node.content.label : "missing";
+  };
+
+  const anchorOptions = CONNECTOR_ANCHORS.map((anchor) => ({ value: anchor, label: anchor }));
+
+  return (
+    <Section title="Connector">
+      <p className="text-[12.5px] text-paper">
+        {nameOf(element.content.sourceId)} → {nameOf(element.content.targetId)}
+      </p>
+
+      <SelectField
+        label="Route"
+        value={element.content.kind}
+        options={CONNECTOR_KINDS.map((kind) => ({ value: kind, label: kind }))}
+        onChange={(kind) => patch({ kind }, "kind")}
+      />
+
+      <Row>
+        <SelectField
+          label="Leaves from"
+          value={element.content.sourceAnchor}
+          options={anchorOptions}
+          onChange={(sourceAnchor) => patch({ sourceAnchor }, "sourceAnchor")}
+        />
+        <SelectField
+          label="Arrives at"
+          value={element.content.targetAnchor}
+          options={anchorOptions}
+          onChange={(targetAnchor) => patch({ targetAnchor }, "targetAnchor")}
+        />
+      </Row>
+
+      <TextField
+        label="Label"
+        value={element.content.label}
+        maxLength={200}
+        placeholder="yes / 200 OK / retry"
+        onChange={(label) => patch({ label }, "label")}
+      />
+
+      <NumberField
+        label="Thickness"
+        value={element.content.thickness}
+        min={1}
+        max={24}
+        onChange={(thickness) => patch({ thickness }, "thickness")}
+      />
+
+      <Row>
+        <ToggleField
+          label="Arrow at end"
+          checked={element.content.endArrow}
+          onChange={(endArrow) => patch({ endArrow }, "endArrow")}
+        />
+        <ToggleField
+          label="Arrow at start"
+          checked={element.content.startArrow}
+          onChange={(startArrow) => patch({ startArrow }, "startArrow")}
+        />
+      </Row>
+
+      <ToggleField
+        label="Dashed"
+        checked={element.content.dashed}
+        onChange={(dashed) => patch({ dashed }, "dashed")}
+      />
+    </Section>
+  );
 }
 
 function TextContent({ element }: { element: TextElement }) {

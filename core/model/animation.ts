@@ -75,6 +75,23 @@ export const revealAnimationSchema = z.object({
   staggerInFrames: frameCountSchema.max(600).default(4),
 });
 
+/**
+ * A marker travelling along a diagram connector: the "data moving between
+ * nodes" case. Only connectors read it.
+ */
+export const flowAnimationSchema = z.object({
+  ...baseAnimation,
+  type: z.literal("flow"),
+  durationInFrames: frameCountSchema.min(1).default(60),
+  /** Markers in flight at once, evenly spaced along the route. */
+  markers: z.number().int().min(1).max(6).default(1),
+  /** Traversals of the route inside the window. */
+  repeat: z.number().int().min(1).max(20).default(1),
+  color: hexColorSchema.default("#57D2E0"),
+  /** Marker diameter in canvas units. */
+  size: z.number().min(2).max(64).default(12),
+});
+
 export const animationSchema = z.discriminatedUnion("type", [
   fadeAnimationSchema,
   slideAnimationSchema,
@@ -82,6 +99,7 @@ export const animationSchema = z.discriminatedUnion("type", [
   highlightAnimationSchema,
   emphasisAnimationSchema,
   revealAnimationSchema,
+  flowAnimationSchema,
 ]);
 
 export type Animation = z.infer<typeof animationSchema>;
@@ -94,6 +112,7 @@ export const ANIMATION_TYPES: AnimationType[] = [
   "highlight",
   "emphasis",
   "reveal",
+  "flow",
 ];
 
 /** How a scene enters from the one before it. */

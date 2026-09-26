@@ -3,6 +3,8 @@
 import { resolveElementState, resolveReveal, type ElementRenderState } from "@/core/animation";
 import type { SceneElement, ThemeConfig } from "@/core/model";
 
+import { NodeView } from "./node-view";
+
 /**
  * Draws one element at one frame.
  *
@@ -21,10 +23,18 @@ export function ElementView({
   sceneDurationInFrames: number;
   theme: ThemeConfig;
 }) {
+  // Connectors are drawn together in ConnectorLayer: their geometry comes from
+  // the nodes they join, so they cannot be positioned by their own box.
+  if (element.type === "connector") return null;
+
   const state = resolveElementState(element, frame, sceneDurationInFrames);
   if (!state.visible) return null;
 
   const { rect, style } = element;
+
+  // A node paints its own outline as SVG, so the wrapper must not draw a box
+  // behind a diamond or clip the stroke of a cylinder.
+  const isDiagramNode = element.type === "node";
 
   return (
     <div
@@ -37,19 +47,22 @@ export function ElementView({
         height: rect.height,
         opacity: state.opacity,
         transform: `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`,
-        backgroundColor: style.fill ?? undefined,
-        border: style.stroke ? `${style.strokeWidth}px solid ${style.stroke}` : undefined,
-        borderRadius: style.cornerRadius,
-        padding: style.padding,
+        backgroundColor: isDiagramNode ? undefined : (style.fill ?? undefined),
+        border:
+          isDiagramNode || !style.stroke
+            ? undefined
+            : `${style.strokeWidth}px solid ${style.stroke}`,
+        borderRadius: isDiagramNode ? undefined : style.cornerRadius,
+        padding: isDiagramNode ? undefined : style.padding,
         boxShadow: style.shadow ? "0 18px 40px rgba(0,0,0,0.35)" : undefined,
-        overflow: "hidden",
+        overflow: isDiagramNode ? "visible" : "hidden",
         // Selection chrome lives in the overlay above the stage; the element
         // itself only advertises that it can be picked up.
         cursor: element.locked ? "default" : "move",
       }}
     >
       <ElementContent element={element} state={state} theme={theme} />
-      {state.highlight && state.highlight.strength > 0.01 ? (
+      {!isDiagramNode && state.highlight && state.highlight.strength > 0.01 ? (
         <span
           aria-hidden="true"
           style={{
@@ -228,6 +241,13 @@ function ElementContent({
         </div>
       );
     }
+
+    case "node":
+      return <NodeView element={element} state={state} theme={theme} />;
+
+    case "connector":
+      // Unreachable: ElementView returns before this for connectors.
+      return null;
 
     case "image": {
       // Assets arrive with the asset pipeline; until then the slot is explicit

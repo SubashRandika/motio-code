@@ -6,6 +6,8 @@ import {
   elementStyleSchema,
   exportConfigSchema,
   themeConfigSchema,
+  type ConnectorElement,
+  type NodeElement,
   type Project,
   type Scene,
   type TextElement,
@@ -19,7 +21,7 @@ export function makeScene(overrides: Partial<Scene> = {}): Scene {
     name: "Opening",
     order: 0,
     durationInFrames: 150,
-    data: { elements: [], transition: null, background: null, notes: "" },
+    data: { elements: [], transition: null, background: null, notes: "", diagram: null },
     ...overrides,
   };
 }
@@ -49,6 +51,67 @@ export function makeTextElement(overrides: Partial<TextElement> = {}): TextEleme
       uppercase: false,
     },
     ...overrides,
+  };
+}
+
+export function makeNodeElement(overrides: Partial<NodeElement> = {}): NodeElement {
+  return {
+    id: "nd_1",
+    name: "Gateway",
+    type: "node",
+    rect: { x: 100, y: 100, width: 200, height: 100 },
+    layer: 0,
+    from: 0,
+    durationInFrames: null,
+    locked: false,
+    hidden: false,
+    style: { ...elementStyleSchema.parse({}), fill: "#151A22", stroke: "#2A3340", strokeWidth: 2 },
+    animations: [],
+    content: {
+      label: "Gateway",
+      sublabel: "",
+      shape: "rectangle",
+      icon: "none",
+      accent: null,
+      fontSize: 24,
+      align: "center",
+      sourceKey: null,
+    },
+    ...overrides,
+  };
+}
+
+export function makeConnectorElement(
+  overrides: Partial<Omit<ConnectorElement, "content">> & {
+    content?: Partial<ConnectorElement["content"]>;
+  } = {},
+): ConnectorElement {
+  return {
+    id: "cn_1",
+    name: "Gateway to Service",
+    type: "connector",
+    rect: { x: 0, y: 0, width: 1, height: 1 },
+    layer: 0,
+    from: 0,
+    durationInFrames: null,
+    locked: false,
+    hidden: false,
+    style: { ...elementStyleSchema.parse({}), stroke: "#8A97A8", strokeWidth: 2 },
+    animations: [],
+    ...overrides,
+    content: {
+      sourceId: "nd_1",
+      targetId: "nd_2",
+      sourceAnchor: "auto",
+      targetAnchor: "auto",
+      kind: "orthogonal",
+      label: "",
+      startArrow: false,
+      endArrow: true,
+      dashed: false,
+      thickness: 2,
+      ...overrides.content,
+    },
   };
 }
 

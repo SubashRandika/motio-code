@@ -110,9 +110,97 @@ export const calloutElementSchema = z.object({
   }),
 });
 
+
+/* ------------------------------------------------------------- diagram bits */
+
+export const NODE_SIDES = ["top", "right", "bottom", "left"] as const;
+export const nodeSideSchema = z.enum(NODE_SIDES);
+export type NodeSide = z.infer<typeof nodeSideSchema>;
+
+/** `auto` lets the router pick the side that gives the shortest route. */
+export const CONNECTOR_ANCHORS = ["auto", ...NODE_SIDES] as const;
+export const connectorAnchorSchema = z.enum(CONNECTOR_ANCHORS);
+export type ConnectorAnchor = z.infer<typeof connectorAnchorSchema>;
+
+export const CONNECTOR_KINDS = ["straight", "orthogonal", "curved"] as const;
+export const connectorKindSchema = z.enum(CONNECTOR_KINDS);
+export type ConnectorKind = z.infer<typeof connectorKindSchema>;
+
+export const DIAGRAM_NODE_SHAPES = [
+  "rectangle",
+  "rounded",
+  "pill",
+  "diamond",
+  "cylinder",
+  "circle",
+  "hexagon",
+] as const;
+export const diagramNodeShapeSchema = z.enum(DIAGRAM_NODE_SHAPES);
+export type DiagramNodeShape = z.infer<typeof diagramNodeShapeSchema>;
+
 /**
- * Diagram and infographic element types are added here in Phase 3. The union
- * is the single extension point; nothing else in the engine needs to change.
+ * A small, vendor-neutral icon set. Cloud-provider icon libraries are a later
+ * phase; these cover the shapes a technical diagram usually needs.
+ */
+export const NODE_ICONS = [
+  "none",
+  "server",
+  "database",
+  "cloud",
+  "user",
+  "queue",
+  "function",
+  "cache",
+  "browser",
+  "api",
+  "storage",
+  "lock",
+  "container",
+  "event",
+] as const;
+export const nodeIconSchema = z.enum(NODE_ICONS);
+export type NodeIcon = z.infer<typeof nodeIconSchema>;
+
+export const nodeElementSchema = z.object({
+  ...baseElement,
+  type: z.literal("node"),
+  content: z.object({
+    label: z.string().max(200),
+    sublabel: z.string().max(200).default(""),
+    shape: diagramNodeShapeSchema.default("rectangle"),
+    icon: nodeIconSchema.default("none"),
+    /** Overrides the theme accent for this node only. */
+    accent: hexColorSchema.nullable().default(null),
+    fontSize: z.number().min(8).max(200).default(28),
+    align: textAlignSchema.default("center"),
+    /**
+     * The id this node had in the text definition. Re-applying edited text
+     * matches on this so a hand-arranged position survives.
+     */
+    sourceKey: z.string().max(80).nullable().default(null),
+  }),
+});
+
+export const connectorElementSchema = z.object({
+  ...baseElement,
+  type: z.literal("connector"),
+  content: z.object({
+    sourceId: idSchema,
+    targetId: idSchema,
+    sourceAnchor: connectorAnchorSchema.default("auto"),
+    targetAnchor: connectorAnchorSchema.default("auto"),
+    kind: connectorKindSchema.default("orthogonal"),
+    label: z.string().max(200).default(""),
+    startArrow: z.boolean().default(false),
+    endArrow: z.boolean().default(true),
+    dashed: z.boolean().default(false),
+    thickness: z.number().min(1).max(24).default(2),
+  }),
+});
+
+/**
+ * The single extension point for new element kinds. Infographic types join the
+ * union in the next step; nothing else in the engine needs to change.
  */
 export const sceneElementSchema = z.discriminatedUnion("type", [
   textElementSchema,
@@ -120,6 +208,8 @@ export const sceneElementSchema = z.discriminatedUnion("type", [
   codeElementSchema,
   imageElementSchema,
   calloutElementSchema,
+  nodeElementSchema,
+  connectorElementSchema,
 ]);
 
 export type SceneElement = z.infer<typeof sceneElementSchema>;
@@ -129,5 +219,39 @@ export type ShapeElement = z.infer<typeof shapeElementSchema>;
 export type CodeElement = z.infer<typeof codeElementSchema>;
 export type ImageElement = z.infer<typeof imageElementSchema>;
 export type CalloutElement = z.infer<typeof calloutElementSchema>;
+export type NodeElement = z.infer<typeof nodeElementSchema>;
+export type ConnectorElement = z.infer<typeof connectorElementSchema>;
 
-export const ELEMENT_TYPES: ElementType[] = ["text", "shape", "code", "image", "callout"];
+export const ELEMENT_TYPES: ElementType[] = [
+  "text",
+  "shape",
+  "code",
+  "image",
+  "callout",
+  "node",
+  "connector",
+];
+
+/**
+ * A connector is drawn between two existing nodes, never added on its own, so
+ * it is excluded from the factory's input type rather than left as a branch
+ * that can only produce an invalid element.
+ */
+export type AddableElementType = Exclude<ElementType, "connector">;
+
+export const ADDABLE_ELEMENT_TYPES: AddableElementType[] = [
+  "text",
+  "code",
+  "shape",
+  "callout",
+  "node",
+  "image",
+];
+
+export function isNode(element: SceneElement): element is NodeElement {
+  return element.type === "node";
+}
+
+export function isConnector(element: SceneElement): element is ConnectorElement {
+  return element.type === "connector";
+}

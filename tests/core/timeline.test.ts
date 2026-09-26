@@ -18,6 +18,7 @@ function scene(id: string, order: number, duration: number, overlap = 0): Scene 
           : CUT_TRANSITION,
       background: null,
       notes: "",
+      diagram: null,
     },
   };
 }

@@ -22,6 +22,7 @@ const TYPE_LABELS: Record<AnimationType, string> = {
   highlight: "Highlight",
   emphasis: "Emphasis",
   reveal: "Reveal",
+  flow: "Flow along route",
 };
 
 const TRIGGER_OPTIONS = [
@@ -222,6 +223,37 @@ function AnimationFields({
           suffix="f"
           onChange={(staggerInFrames) => patch({ staggerInFrames }, "stagger")}
         />
+      ) : null}
+
+      {animation.type === "flow" ? (
+        <>
+          <Row>
+            <NumberField
+              label="Markers"
+              value={animation.markers}
+              min={1}
+              max={6}
+              onChange={(markers) => patch({ markers }, "markers")}
+            />
+            <NumberField
+              label="Traversals"
+              value={animation.repeat}
+              min={1}
+              max={20}
+              onChange={(repeat) => patch({ repeat }, "repeat")}
+            />
+          </Row>
+          <NumberField
+            label="Marker size"
+            value={animation.size}
+            min={2}
+            max={64}
+            onChange={(size) => patch({ size }, "size")}
+          />
+          <p className="text-[11px] leading-relaxed text-mist-dim">
+            Only a connector shows a flow marker.
+          </p>
+        </>
       ) : null}
     </>
   );

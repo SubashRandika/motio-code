@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   Braces,
+  GitBranch,
   Check,
   CloudOff,
   Loader2,
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils/cn";
 
 import { CanvasStage } from "./canvas-stage";
 import { ConfigEditor } from "./config-editor";
+import { DiagramEditor } from "./diagram-editor";
 import { ElementRail, LayerList } from "./element-panel";
 import { PropertiesPanel } from "./properties-panel";
 import { SceneList } from "./scene-list";
@@ -167,6 +169,13 @@ export function EditorShell() {
 
         <div className="ml-auto flex items-center gap-1.5">
           <ToolbarToggle
+            label={`${panels.diagram ? "Hide" : "Show"} the diagram text panel`}
+            active={panels.diagram}
+            onClick={() => togglePanel("diagram")}
+          >
+            <GitBranch className="size-4" />
+          </ToolbarToggle>
+          <ToolbarToggle
             label={`${panels.config ? "Hide" : "Show"} the configuration panel`}
             active={panels.config}
             onClick={() => togglePanel("config")}
@@ -213,7 +222,8 @@ export function EditorShell() {
         ) : null}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <CanvasStage project={project} timeline={timeline} frame={clock.frame} />
+          <CanvasStage timeline={timeline} frame={clock.frame} />
+          {panels.diagram ? <DiagramEditor /> : null}
           {panels.config ? <ConfigEditor /> : null}
           <TimelinePanel timeline={timeline} clock={clock} />
         </div>

@@ -30,7 +30,7 @@ function setup(elements = [makeTextElement()]) {
   const store = createEditorStore(project);
   const timeline = buildTimeline(project.scenes);
 
-  renderWithStore(<CanvasStage project={project} timeline={timeline} frame={0} />, store);
+  renderWithStore(<CanvasStage timeline={timeline} frame={0} />, store);
 
   const stage = document.querySelector<HTMLElement>("[data-canvas-stage]");
   const element = (id = "el_1") => document.querySelector<HTMLElement>(`[data-element-id="${id}"]`);
