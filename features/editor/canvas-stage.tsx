@@ -2,18 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { getActiveSegments, type Timeline } from "@/core/animation";
+import type { Timeline } from "@/core/animation";
 import { buildConnectorPath } from "@/core/diagram";
-import {
-  isConnector,
-  isNode,
-  type ConnectorElement,
-  type Project,
-  type SceneElement,
-} from "@/core/model";
+import { isConnector, isNode, type SceneElement } from "@/core/model";
+import { ProjectComposition } from "@/features/preview/composition";
 
-import { ConnectorLayer } from "./connector-layer";
-import { ElementView } from "./element-view";
 import { SelectionOverlay, type SelectionBox } from "./selection-overlay";
 import { selectActiveScene } from "./store";
 import { useEditorStore } from "./store-provider";
@@ -67,7 +60,6 @@ export function CanvasStage({ timeline, frame }: { timeline: Timeline; frame: nu
     return () => observer.disconnect();
   }, [project.canvas.width, project.canvas.height]);
 
-  const active = getActiveSegments(timeline, frame);
   const selectionBoxes = selectionBoxesFor(elements, selectedElementIds);
 
   return (
@@ -99,33 +91,9 @@ export function CanvasStage({ timeline, frame }: { timeline: Timeline; frame: nu
           }}
           className="absolute top-0 left-0 overflow-hidden"
         >
-          {active.map(({ segment, localFrame, transitionProgress }, index) => {
-            const scene = project.scenes.find((item) => item.id === segment.sceneId);
-            if (!scene) return null;
-
-            // The incoming scene fades over the outgoing one during a transition.
-            const isIncoming = index === active.length - 1 && active.length > 1;
-            const opacity = isIncoming ? transitionProgress : 1;
-
-            return (
-              <div
-                key={segment.sceneId}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  opacity,
-                  backgroundColor: scene.data.background ?? undefined,
-                }}
-              >
-                <SceneElements
-                  elements={scene.data.elements}
-                  frame={localFrame}
-                  sceneDurationInFrames={scene.durationInFrames}
-                  project={project}
-                />
-              </div>
-            );
-          })}
+          {/* The same tree the renderer draws. The editor only adds the scaling
+              wrapper above and the selection chrome below. */}
+          <ProjectComposition project={project} frame={frame} timeline={timeline} />
         </div>
 
         <SelectionOverlay
@@ -150,79 +118,6 @@ export function CanvasStage({ timeline, frame }: { timeline: Timeline; frame: nu
         </p>
       ) : null}
     </div>
-  );
-}
-
-interface PaintOrder {
-  /** Elements below the connector layer. */
-  behind: SceneElement[];
-  connectors: ConnectorElement[];
-  /** Elements above the connector layer, nodes among them. */
-  inFront: SceneElement[];
-}
-
-/**
- * Splits a scene into paint order.
- *
- * All connectors share one SVG layer, inserted at the lowest layer any
- * connector holds. Because a compiled diagram assigns connectors lower layers
- * than its nodes, routes land behind the boxes they join -- which is what makes
- * an arrow tuck under a node's edge instead of crossing it.
- */
-export function paintOrder(elements: SceneElement[]): PaintOrder {
-  const sorted = [...elements].sort((a, b) => a.layer - b.layer);
-  const connectors = sorted.filter(isConnector);
-
-  if (connectors.length === 0) {
-    return { behind: sorted, connectors: [], inFront: [] };
-  }
-
-  const cut = connectors[0].layer;
-  return {
-    behind: sorted.filter((element) => !isConnector(element) && element.layer < cut),
-    connectors,
-    inFront: sorted.filter((element) => !isConnector(element) && element.layer >= cut),
-  };
-}
-
-function SceneElements({
-  elements,
-  frame,
-  sceneDurationInFrames,
-  project,
-}: {
-  elements: SceneElement[];
-  frame: number;
-  sceneDurationInFrames: number;
-  project: Project;
-}) {
-  const order = paintOrder(elements);
-
-  const paint = (element: SceneElement) => (
-    <ElementView
-      key={element.id}
-      element={element}
-      frame={frame}
-      sceneDurationInFrames={sceneDurationInFrames}
-      theme={project.theme}
-    />
-  );
-
-  return (
-    <>
-      {order.behind.map(paint)}
-      {order.connectors.length > 0 ? (
-        <ConnectorLayer
-          connectors={order.connectors}
-          elements={elements}
-          frame={frame}
-          sceneDurationInFrames={sceneDurationInFrames}
-          canvas={project.canvas}
-          theme={project.theme}
-        />
-      ) : null}
-      {order.inFront.map(paint)}
-    </>
   );
 }
 

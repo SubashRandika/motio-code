@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildTimeline } from "@/core/animation";
 import { isConnector, isNode, type SceneElement } from "@/core/model";
-import { CanvasStage, paintOrder } from "@/features/editor/canvas-stage";
+import { CanvasStage } from "@/features/editor/canvas-stage";
+import { paintOrder } from "@/features/preview/composition";
 import { createEditorStore } from "@/features/editor/store";
 
 import { makeConnectorElement, makeNodeElement, makeProject, makeTextElement, renderWithStore } from "../fixtures";

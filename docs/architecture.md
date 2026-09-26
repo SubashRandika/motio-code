@@ -31,6 +31,7 @@ core/code/        syntax tokens, the cached highlighter, reveal arithmetic
 core/presets/     the named animation presets, written in terms of the model above
 core/infographic/ locale-free number formatting, chart scaling, value animation
 core/templates/   the ten starter templates, as functions from a canvas to scenes
+core/render/      the project-to-composition mapping: output size, frame rate, resampling
 ```
 
 ## The timing model
@@ -475,6 +476,67 @@ It now scales the layout uniformly to fit inside a 4% margin, and `compileDiagra
 scales the node label size by the same factor so text stays in proportion to its
 box. A graph that already fits is never enlarged. This was not a template problem:
 any user writing a wide flowchart on a portrait canvas hit it.
+
+## Preview and rendering
+
+### One composition, two clocks
+
+`features/preview/composition.tsx` holds `ProjectComposition`: everything a
+project looks like at a given frame. It takes a project and a frame and nothing
+else -- no store, no selection, no zoom, no refs, no measurement -- so the same
+two arguments always produce the same pixels.
+
+Both the editor canvas and the Remotion render draw *that* tree. The editor wraps
+it in a scaling container and its selection chrome; `MotioComposition` wraps it
+in the export's scale and offset and feeds it `useCurrentFrame()`. There is no
+second implementation of the composition to keep in step, which is the reason the
+preview and the output cannot drift apart.
+
+What does differ is the clock. `useFrameClock` drives the editor canvas, because
+the canvas has to stay editable while it plays and the playhead is shared with
+the timeline; the Remotion Player drives the preview modal. Two clocks is a real
+risk, and it is bounded deliberately: a clock's only output is an integer frame,
+and everything downstream is a pure function of it. A disagreement can therefore
+only ever be about *which* frame is shown, never about what a frame contains.
+
+### The mapping is pure
+
+`core/render/plan.ts` is framework-free, so the decisions a render depends on are
+testable without mounting anything:
+
+- **The canvas is never cropped.** When the export aspect ratio differs from the
+  one the project was composed at, the canvas is scaled to fit and centred,
+  leaving bars in the canvas colour. Cropping would silently cut away work the
+  user arranged deliberately. Matching the export ratio to the canvas produces no
+  bars at all, which is why the properties panel marks that option `(canvas)`.
+- **Changing the export frame rate resamples, it does not retime.** The timeline
+  is authored in canvas frames, so 60fps output must be the same number of
+  *seconds* at twice the frames -- not a video that plays at half speed.
+  `canvasFrameFor` converts an output frame back to the authored frame it should
+  draw. This is only arithmetic because every element is already a pure function
+  of a frame number.
+- **A composition is never shorter than one frame.** Remotion rejects a zero
+  length, and a project with no scenes yet is a normal thing to preview.
+
+### The Player is loaded on demand
+
+`@remotion/player` is a few hundred kilobytes and most editing sessions never
+open the preview, so `ExportPreview` is a `next/dynamic` import with `ssr: false`.
+Remotion is absent from every eager chunk of the editor route; it arrives when
+the Preview button is pressed.
+
+Draft preview quality renders the same composition at 720p. It changes nothing
+about the export -- only how many pixels the preview asks the browser for per
+frame, so a heavy project plays at its true speed instead of stuttering.
+
+### Licensing, before it becomes expensive
+
+Remotion is not MIT. It is free for individuals and organisations of up to three
+people, explicitly including commercial use, SaaS and automations; above that it
+is $0.01 per render with a $100/month minimum. The threshold is headcount, not
+revenue, and the render-based tier is exactly what a product that renders videos
+for its users falls into. `docs/decisions/remotion-licensing.md` records the
+terms as they were read, with dates.
 
 ## Schema evolution
 

@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Field, FormError, Input } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
 
 import { renameProjectAction, type ActionState } from "./actions";
 
@@ -142,39 +143,6 @@ function MenuSubmit({ icon, label }: { icon: React.ReactNode; label: string }) {
       {icon}
       {pending ? "Duplicating…" : label}
     </button>
-  );
-}
-
-/** A modal built on <dialog>, which gives focus trapping and Escape for free. */
-function Modal({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
-
-  return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === ref.current) ref.current?.close();
-      }}
-      className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-panel border border-line bg-panel p-0 text-paper backdrop:bg-black/60"
-    >
-      <div className="p-5">
-        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
-        <div className="mt-4">{children}</div>
-      </div>
-    </dialog>
   );
 }
 

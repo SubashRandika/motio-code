@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@remotion/player": "4.0.529",
     "@shikijs/langs": "^4.4.3",
     "@shikijs/themes": "^4.4.3",
     "@supabase/ssr": "^0.12.7",
@@ -22,6 +23,7 @@
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "remotion": "4.0.529",
     "server-only": "^0.0.1",
     "shiki": "^4.4.3",
     "tailwind-merge": "^3.7.0",

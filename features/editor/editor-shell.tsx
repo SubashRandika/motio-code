@@ -9,11 +9,14 @@ import {
   Loader2,
   PanelLeft,
   PanelRight,
+  Play,
   Redo2,
+  Settings,
   Undo2,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { buildTimeline } from "@/core/animation";
@@ -32,6 +35,16 @@ import { useEditorStore, useEditorStoreApi } from "./store-provider";
 import { TimelinePanel } from "./timeline";
 import { useAutosave } from "./use-autosave";
 
+/**
+ * Loaded on demand: the Remotion Player is a few hundred kilobytes, and most
+ * editing sessions never open the preview. `loading` renders nothing because
+ * this mounts a modal -- a placeholder would appear inline in the toolbar.
+ */
+const ExportPreview = dynamic(
+  () => import("@/features/preview/export-preview").then((module) => module.ExportPreview),
+  { ssr: false, loading: () => null },
+);
+
 export function EditorShell() {
   const store = useEditorStoreApi();
   const project = useEditorStore((state) => state.project);
@@ -41,6 +54,7 @@ export function EditorShell() {
   const selectScene = useEditorStore((state) => state.selectScene);
 
   const { save, status } = useAutosave();
+  const [previewing, setPreviewing] = useState(false);
 
   const timeline = useMemo(() => buildTimeline(project.scenes), [project.scenes]);
   const clock = useFrameClock({
@@ -168,6 +182,23 @@ export function EditorShell() {
         <SaveStatus status={status} />
 
         <div className="ml-auto flex items-center gap-1.5">
+          <Button variant="secondary" size="sm" onClick={() => setPreviewing(true)}>
+            <Play className="size-3.5" />
+            Preview
+          </Button>
+
+          {/* The only route to project settings, which is where a project is
+              renamed and deleted. Without this the page is unreachable once the
+              editor is open. */}
+          <Link
+            href={`/projects/${project.id}/settings`}
+            aria-label="Project settings"
+            title="Project settings"
+            className="grid size-8 place-items-center rounded-md text-mist transition-colors hover:bg-raised hover:text-paper"
+          >
+            <Settings className="size-4" />
+          </Link>
+
           <ToolbarToggle
             label={`${panels.diagram ? "Hide" : "Show"} the diagram text panel`}
             active={panels.diagram}
@@ -237,6 +268,10 @@ export function EditorShell() {
           </aside>
         ) : null}
       </div>
+
+      {previewing ? (
+        <ExportPreview project={project} onClose={() => setPreviewing(false)} />
+      ) : null}
     </div>
   );
 }

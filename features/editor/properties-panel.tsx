@@ -24,6 +24,7 @@ import {
   canvasForAspectRatio,
   type Transition,
 } from "@/core/model";
+import { planRender } from "@/core/render";
 import { formatDuration } from "@/lib/utils/format";
 
 import {
@@ -291,8 +292,11 @@ function ThemeProperties() {
 }
 
 function ExportProperties() {
-  const exportConfig = useEditorStore((state) => state.project.export);
+  const project = useEditorStore((state) => state.project);
+  const exportConfig = project.export;
   const setExport = useEditorStore((state) => state.setExport);
+
+  const plan = planRender(project, exportConfig);
 
   return (
     <Section title="Export">
@@ -318,9 +322,35 @@ function ExportProperties() {
         />
       </Row>
 
-      <p className="text-[11.5px] leading-relaxed text-mist-dim">
-        Rendering arrives in a later phase. These settings are saved with the project.
+      <Row>
+        <SelectField
+          label="Aspect ratio"
+          value={exportConfig.aspectRatio}
+          options={ASPECT_RATIOS.map((aspectRatio) => ({
+            value: aspectRatio,
+            label: aspectRatio === project.canvas.aspectRatio ? `${aspectRatio} (canvas)` : aspectRatio,
+          }))}
+          onChange={(aspectRatio) => setExport({ aspectRatio })}
+        />
+        <SelectField
+          label="Frame rate"
+          value={String(exportConfig.fps)}
+          options={FPS_OPTIONS.map((fps) => ({ value: String(fps), label: `${fps} fps` }))}
+          onChange={(fps) => setExport({ fps: Number(fps) })}
+        />
+      </Row>
+
+      <p className="tabular text-[11.5px] leading-relaxed text-mist-dim">
+        {plan.width}×{plan.height} · {plan.durationInFrames} frames ·{" "}
+        {formatDuration(plan.durationInFrames, plan.fps)}
       </p>
+
+      {plan.letterboxed ? (
+        <p className="text-[11.5px] leading-relaxed text-amber">
+          Composed at {project.canvas.aspectRatio}, so it is scaled to fit and centred rather than
+          cropped.
+        </p>
+      ) : null}
     </Section>
   );
 }
