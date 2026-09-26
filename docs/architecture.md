@@ -638,20 +638,47 @@ a dev server the author already had open on 3000 -- which would test whatever co
 The suite runs at two viewports: `Desktop Chrome` and `Pixel 5`. The editor is
 excluded from the mobile project because it is desktop-first by design.
 
-### The authenticated half is not covered yet
+### The authenticated half
 
-Everything above is signed out. The §20 journey -- sign in, create, edit, preview,
-save, reopen, export -- needs a session, and both ways of getting one carry a cost
-that is not ours to choose unilaterally:
+The §20 journey -- sign in, create, edit, preview, save, reopen, export -- needs a
+session, and the two ways of getting one are not equivalent:
 
-- A **local Supabase stack** (`supabase start`) needs Docker, which is not
-  installed on this machine.
-- A **dedicated test user on the hosted project** means Playwright creating and
-  deleting real rows in the same database that holds real work, and signup needs
-  email confirmation.
+- A **local Supabase stack** (`supabase start`) is the safe one: a throwaway
+  database, no risk to real work, and it would fix the divergent migration history
+  as a side effect. It needs Docker, which is not installed on this machine.
+- A **dedicated test account on the hosted project** is the available one, and it
+  means a browser creating and deleting real rows in the same database that holds
+  real work.
 
-Until that is decided, the authenticated flows are covered by component tests
-against the store and by hand.
+The harness takes the second route, with containment designed in rather than
+bolted on:
+
+```
+e2e/auth.setup.ts          signs in once, saves the session for reuse
+e2e/authenticated/         the specs that need it
+playwright/.auth/user.json the saved session (gitignored, never committed)
+```
+
+`E2E_EMAIL` and `E2E_PASSWORD` come from the environment. Without them the setup
+writes a signed-out state and the authenticated specs **skip** rather than fail --
+a missing test account is not a broken product.
+
+Three rules keep it off real data:
+
+1. Every project it creates is named with a unique run id (`e2e-<base36 time>`),
+   so no locator can match something a human made.
+2. It only acts on a project it created, found by that exact name.
+3. It deletes its own project at the end, through the UI -- which also exercises
+   the delete confirmation.
+
+The journey stops short of running a render. A full export is slow, and every
+render is a metered event under Remotion's licence, so the spec asserts the export
+is offered and enabled rather than paying for one per CI run.
+
+Note that the projects are split by session rather than by file. Handing every
+project a saved session would make the route-protection specs assert the opposite
+of what they mean, so `desktop` and `mobile` deliberately ignore
+`e2e/authenticated/`.
 
 ## Schema evolution
 

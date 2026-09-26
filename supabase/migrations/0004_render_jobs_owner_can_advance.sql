@@ -18,6 +18,19 @@
 --        in storage, so a client-writable path is a way to point a download at
 --        someone else's object. When server-side rendering lands, service_role
 --        writes that column.
+--
+-- The REVOKE is load-bearing, and its absence made the first version of this
+-- migration do nothing useful. Supabase's default privileges grant ALL on every
+-- new table in `public` to anon and authenticated, so a table-level UPDATE was
+-- already in place. Column grants are additive -- they cannot narrow a table-wide
+-- grant -- so without revoking first, adding the policy below would have made
+-- every column writable, render_settings and output_path included. anon is
+-- revoked too: it has no UPDATE policy, so the privilege was pure surface area.
+
+revoke update on public.render_jobs from authenticated, anon;
+
+grant update (status, progress, error_message, started_at, completed_at)
+  on public.render_jobs to authenticated;
 
 -- Postgres has no "create policy if not exists", and this migration may be
 -- applied by hand in the SQL editor before the CLI ever sees it, so the drop
@@ -28,6 +41,3 @@ create policy render_jobs_update_own on public.render_jobs
   for update to authenticated
   using ((select auth.uid()) = owner_id)
   with check ((select auth.uid()) = owner_id);
-
-grant update (status, progress, error_message, started_at, completed_at)
-  on public.render_jobs to authenticated;

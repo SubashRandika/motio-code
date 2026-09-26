@@ -3,17 +3,23 @@ import { defineConfig, devices } from "@playwright/test";
 const PORT = 3100;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
+const AUTH_STATE = "playwright/.auth/user.json";
+
 /**
  * End-to-end tests.
  *
  * These cover what the component tests structurally cannot: route protection,
  * which lives in the proxy (middleware) and only exists once a real request is
- * made, and redirect handling, where the thing that matters is what a browser
- * does with a header rather than what a function returned.
+ * made; layout, which jsdom has no engine for; and redirects, where what matters
+ * is what a browser does with a header rather than what a function returned.
  *
- * A dedicated port keeps a run from colliding with a dev server the user already
- * has open on 3000, which would otherwise be silently reused and test whatever
- * code that server happened to be running.
+ * The projects are split by session rather than by file, because the signed-out
+ * specs must stay signed out -- handing every project a saved session would make
+ * the route-protection tests assert the opposite of what they mean.
+ *
+ * A dedicated port keeps a run from colliding with a dev server the author
+ * already has open on 3000, which would otherwise be silently reused and test
+ * whatever code that server happened to be running.
  */
 export default defineConfig({
   testDir: "e2e",
@@ -28,10 +34,29 @@ export default defineConfig({
   },
 
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    // The dashboard and marketing pages are meant to work on a phone; the
-    // editor is desktop-first by design and is not tested at this width.
-    { name: "mobile", use: { ...devices["Pixel 5"] } },
+    {
+      name: "setup",
+      testMatch: /auth\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "desktop",
+      testIgnore: [/authenticated\//, /auth\.setup\.ts/],
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      // The dashboard and marketing pages are meant to work on a phone; the
+      // editor is desktop-first by design and is not tested at this width.
+      name: "mobile",
+      testIgnore: [/authenticated\//, /auth\.setup\.ts/],
+      use: { ...devices["Pixel 5"] },
+    },
+    {
+      name: "authenticated",
+      testMatch: /authenticated\/.*\.spec\.ts/,
+      dependencies: ["setup"],
+      use: { ...devices["Desktop Chrome"], storageState: AUTH_STATE },
+    },
   ],
 
   webServer: {
