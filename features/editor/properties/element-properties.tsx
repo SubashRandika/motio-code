@@ -24,6 +24,13 @@ import {
 import { selectActiveScene } from "../store";
 import { useEditorStore } from "../store-provider";
 import { AnimationEditor } from "./animation-editor";
+import {
+  ChartContent,
+  ComparisonContent,
+  CounterContent,
+  ProgressContent,
+  StepsContent,
+} from "./infographic-properties";
 import { PresetPicker } from "./preset-picker";
 import {
   ColorField,
@@ -305,6 +312,16 @@ function ContentFields({ element }: { element: SceneElement }) {
       return <NodeContent element={element} />;
     case "connector":
       return <ConnectorContent element={element} />;
+    case "counter":
+      return <CounterContent element={element} />;
+    case "progress":
+      return <ProgressContent element={element} />;
+    case "chart":
+      return <ChartContent element={element} />;
+    case "comparison":
+      return <ComparisonContent element={element} />;
+    case "steps":
+      return <StepsContent element={element} />;
   }
 }
 

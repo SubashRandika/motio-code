@@ -210,9 +210,144 @@ export const connectorElementSchema = z.object({
   }),
 });
 
+
+/* -------------------------------------------------------- infographic bits */
+
 /**
- * The single extension point for new element kinds. Infographic types join the
- * union in the next step; nothing else in the engine needs to change.
+ * A number the viewer is meant to read.
+ *
+ * `value` is always the *true* value. An animation only ever scales how far the
+ * element has counted towards it, so what is on screen at the end of the
+ * animation is exactly what is stored -- a chart can never show a figure that is
+ * not in the data.
+ */
+export const counterElementSchema = z.object({
+  ...baseElement,
+  type: z.literal("counter"),
+  content: z.object({
+    value: z.number().min(-1e12).max(1e12),
+    /** Fixed decimal places. Formatting is locale-independent on purpose. */
+    decimals: z.number().int().min(0).max(4).default(0),
+    /** Groups thousands with a comma. */
+    separator: z.boolean().default(true),
+    prefix: z.string().max(12).default(""),
+    suffix: z.string().max(12).default(""),
+    label: z.string().max(200).default(""),
+    fontSize: z.number().min(8).max(400).default(96),
+    labelFontSize: z.number().min(8).max(200).default(24),
+    color: hexColorSchema.default("#E8ECF2"),
+    align: textAlignSchema.default("center"),
+  }),
+});
+
+export const PROGRESS_SHAPES = ["bar", "ring"] as const;
+export const progressShapeSchema = z.enum(PROGRESS_SHAPES);
+export type ProgressShape = z.infer<typeof progressShapeSchema>;
+
+export const progressElementSchema = z.object({
+  ...baseElement,
+  type: z.literal("progress"),
+  content: z.object({
+    value: z.number().min(0).max(1e12),
+    max: z.number().min(0.000001).max(1e12).default(100),
+    shape: progressShapeSchema.default("bar"),
+    label: z.string().max(200).default(""),
+    showValue: z.boolean().default(true),
+    suffix: z.string().max(12).default("%"),
+    /** Bar height, or ring stroke width, in canvas units. */
+    thickness: z.number().min(1).max(200).default(16),
+    track: hexColorSchema.nullable().default(null),
+    fill: hexColorSchema.nullable().default(null),
+    fontSize: z.number().min(8).max(200).default(28),
+  }),
+});
+
+export const CHART_ORIENTATIONS = ["vertical", "horizontal"] as const;
+export const chartOrientationSchema = z.enum(CHART_ORIENTATIONS);
+export type ChartOrientation = z.infer<typeof chartOrientationSchema>;
+
+export const chartBarSchema = z.object({
+  label: z.string().max(80).default(""),
+  value: z.number().min(-1e9).max(1e9),
+  /** Overrides the theme accent for this bar only. */
+  color: hexColorSchema.nullable().default(null),
+});
+
+export type ChartBar = z.infer<typeof chartBarSchema>;
+
+export const chartElementSchema = z.object({
+  ...baseElement,
+  type: z.literal("chart"),
+  content: z.object({
+    bars: z.array(chartBarSchema).min(1).max(12),
+    orientation: chartOrientationSchema.default("vertical"),
+    /** `null` scales to the largest bar. */
+    max: z.number().min(0.000001).max(1e12).nullable().default(null),
+    showValues: z.boolean().default(true),
+    decimals: z.number().int().min(0).max(4).default(0),
+    suffix: z.string().max(12).default(""),
+    /** Space between bars, in canvas units. */
+    gap: z.number().min(0).max(200).default(16),
+    fontSize: z.number().min(8).max(120).default(22),
+  }),
+});
+
+export const COMPARISON_SIDES = ["none", "left", "right"] as const;
+export const comparisonSideSchema = z.enum(COMPARISON_SIDES);
+
+export const comparisonRowSchema = z.object({
+  label: z.string().max(120).default(""),
+  left: z.string().max(120).default(""),
+  right: z.string().max(120).default(""),
+});
+
+export type ComparisonRow = z.infer<typeof comparisonRowSchema>;
+
+export const comparisonElementSchema = z.object({
+  ...baseElement,
+  type: z.literal("comparison"),
+  content: z.object({
+    leftTitle: z.string().max(80).default("Before"),
+    rightTitle: z.string().max(80).default("After"),
+    rows: z.array(comparisonRowSchema).min(1).max(10),
+    /** Tints one column, for "this is the one we chose". */
+    favour: comparisonSideSchema.default("none"),
+    fontSize: z.number().min(8).max(120).default(24),
+  }),
+});
+
+export const STEP_ORIENTATIONS = ["vertical", "horizontal"] as const;
+export const stepOrientationSchema = z.enum(STEP_ORIENTATIONS);
+export type StepOrientation = z.infer<typeof stepOrientationSchema>;
+
+export const processStepSchema = z.object({
+  title: z.string().max(120).default(""),
+  detail: z.string().max(240).default(""),
+});
+
+export type ProcessStep = z.infer<typeof processStepSchema>;
+
+/**
+ * A sequence of steps. Laid out vertically it is a process; laid out
+ * horizontally with its connector on it is a timeline, which is why AGENTS.md
+ * lists both but only one element is needed.
+ */
+export const stepsElementSchema = z.object({
+  ...baseElement,
+  type: z.literal("steps"),
+  content: z.object({
+    steps: z.array(processStepSchema).min(1).max(8),
+    orientation: stepOrientationSchema.default("vertical"),
+    numbered: z.boolean().default(true),
+    /** Draws the line joining one step to the next. */
+    connector: z.boolean().default(true),
+    fontSize: z.number().min(8).max(120).default(26),
+    detailFontSize: z.number().min(8).max(120).default(18),
+  }),
+});
+
+/**
+ * The single extension point for new element kinds.
  */
 export const sceneElementSchema = z.discriminatedUnion("type", [
   textElementSchema,
@@ -222,6 +357,11 @@ export const sceneElementSchema = z.discriminatedUnion("type", [
   calloutElementSchema,
   nodeElementSchema,
   connectorElementSchema,
+  counterElementSchema,
+  progressElementSchema,
+  chartElementSchema,
+  comparisonElementSchema,
+  stepsElementSchema,
 ]);
 
 export type SceneElement = z.infer<typeof sceneElementSchema>;
@@ -233,6 +373,11 @@ export type ImageElement = z.infer<typeof imageElementSchema>;
 export type CalloutElement = z.infer<typeof calloutElementSchema>;
 export type NodeElement = z.infer<typeof nodeElementSchema>;
 export type ConnectorElement = z.infer<typeof connectorElementSchema>;
+export type CounterElement = z.infer<typeof counterElementSchema>;
+export type ProgressElement = z.infer<typeof progressElementSchema>;
+export type ChartElement = z.infer<typeof chartElementSchema>;
+export type ComparisonElement = z.infer<typeof comparisonElementSchema>;
+export type StepsElement = z.infer<typeof stepsElementSchema>;
 
 export const ELEMENT_TYPES: ElementType[] = [
   "text",
@@ -242,6 +387,11 @@ export const ELEMENT_TYPES: ElementType[] = [
   "callout",
   "node",
   "connector",
+  "counter",
+  "progress",
+  "chart",
+  "comparison",
+  "steps",
 ];
 
 /**
@@ -257,6 +407,11 @@ export const ADDABLE_ELEMENT_TYPES: AddableElementType[] = [
   "shape",
   "callout",
   "node",
+  "counter",
+  "progress",
+  "chart",
+  "comparison",
+  "steps",
   "image",
 ];
 
@@ -270,4 +425,11 @@ export function isConnector(element: SceneElement): element is ConnectorElement 
 
 export function isCode(element: SceneElement): element is CodeElement {
   return element.type === "code";
+}
+
+/** Elements whose content carries numbers an animation can count towards. */
+export function isNumeric(
+  element: SceneElement,
+): element is CounterElement | ProgressElement | ChartElement {
+  return element.type === "counter" || element.type === "progress" || element.type === "chart";
 }

@@ -3,8 +3,13 @@
 import { resolveElementState, type ElementRenderState } from "@/core/animation";
 import type { SceneElement, ThemeConfig } from "@/core/model";
 
+import { ChartView } from "./chart-view";
 import { CodeView } from "./code-view";
+import { ComparisonView } from "./comparison-view";
+import { CounterView } from "./counter-view";
 import { NodeView } from "./node-view";
+import { ProgressView } from "./progress-view";
+import { StepsView } from "./steps-view";
 
 /**
  * Draws one element at one frame.
@@ -183,6 +188,21 @@ function ElementContent({
       // Unreachable: ElementView returns before this for connectors.
       return null;
 
+    case "counter":
+      return <CounterView element={element} state={state} theme={theme} />;
+
+    case "progress":
+      return <ProgressView element={element} state={state} theme={theme} />;
+
+    case "chart":
+      return <ChartView element={element} state={state} theme={theme} />;
+
+    case "comparison":
+      return <ComparisonView element={element} state={state} theme={theme} />;
+
+    case "steps":
+      return <StepsView element={element} state={state} theme={theme} />;
+
     case "image": {
       // Assets arrive with the asset pipeline; until then the slot is explicit
       // rather than silently blank.
@@ -203,4 +223,9 @@ function ElementContent({
       );
     }
   }
+
+  // A new element type with no case above is a type error here rather than an
+  // element that silently renders nothing.
+  const unhandled: never = element;
+  return unhandled;
 }

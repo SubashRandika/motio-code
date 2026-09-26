@@ -4,12 +4,17 @@ import {
   elementStyleSchema,
   type AddableElementType,
   type CalloutElement,
+  type ChartElement,
   type CodeElement,
+  type ComparisonElement,
+  type CounterElement,
   type ElementType,
   type ImageElement,
   type NodeElement,
+  type ProgressElement,
   type SceneElement,
   type ShapeElement,
+  type StepsElement,
   type TextElement,
 } from "./element";
 import { createId } from "./primitives";
@@ -197,6 +202,157 @@ export function createElement(
       return element;
     }
 
+    case "counter": {
+      const element: CounterElement = {
+        id: createId("el"),
+        name: "Counter",
+        type: "counter",
+        rect: centredRect(canvas, 0.3, 0.22, index),
+        layer: index,
+        from: 0,
+        durationInFrames: null,
+        locked: false,
+        hidden: false,
+        style: { ...BASE_STYLE },
+        animations: [],
+        content: {
+          value: 99.9,
+          decimals: 1,
+          separator: true,
+          prefix: "",
+          suffix: "%",
+          label: "Uptime",
+          fontSize: Math.round(canvas.height * 0.12),
+          labelFontSize: Math.round(canvas.height * 0.028),
+          color: theme.text,
+          align: "center",
+        },
+      };
+      return element;
+    }
+
+    case "progress": {
+      const element: ProgressElement = {
+        id: createId("el"),
+        name: "Progress",
+        type: "progress",
+        rect: centredRect(canvas, 0.36, 0.12, index),
+        layer: index,
+        from: 0,
+        durationInFrames: null,
+        locked: false,
+        hidden: false,
+        style: { ...BASE_STYLE },
+        animations: [],
+        content: {
+          value: 72,
+          max: 100,
+          shape: "bar",
+          label: "Test coverage",
+          showValue: true,
+          suffix: "%",
+          thickness: Math.max(8, Math.round(canvas.height * 0.018)),
+          track: null,
+          fill: null,
+          fontSize: Math.round(canvas.height * 0.03),
+        },
+      };
+      return element;
+    }
+
+    case "chart": {
+      const element: ChartElement = {
+        id: createId("el"),
+        name: "Bar chart",
+        type: "chart",
+        rect: centredRect(canvas, 0.46, 0.4, index),
+        layer: index,
+        from: 0,
+        durationInFrames: null,
+        locked: false,
+        hidden: false,
+        style: { ...BASE_STYLE },
+        animations: [],
+        content: {
+          bars: [
+            { label: "Before", value: 820, color: null },
+            { label: "After", value: 240, color: null },
+          ],
+          orientation: "vertical",
+          max: null,
+          showValues: true,
+          decimals: 0,
+          suffix: "ms",
+          gap: Math.round(canvas.width * 0.012),
+          fontSize: Math.round(canvas.height * 0.024),
+        },
+      };
+      return element;
+    }
+
+    case "comparison": {
+      const element: ComparisonElement = {
+        id: createId("el"),
+        name: "Comparison",
+        type: "comparison",
+        rect: centredRect(canvas, 0.52, 0.34, index),
+        layer: index,
+        from: 0,
+        durationInFrames: null,
+        locked: false,
+        hidden: false,
+        style: {
+          ...BASE_STYLE,
+          fill: theme.surface,
+          stroke: theme.border,
+          strokeWidth: 1,
+          cornerRadius: 10,
+        },
+        animations: [],
+        content: {
+          leftTitle: "REST",
+          rightTitle: "GraphQL",
+          rows: [
+            { label: "Round trips", left: "Several", right: "One" },
+            { label: "Over-fetching", left: "Likely", right: "Avoidable" },
+            { label: "Caching", left: "Built in", right: "Manual" },
+          ],
+          favour: "none",
+          fontSize: Math.round(canvas.height * 0.026),
+        },
+      };
+      return element;
+    }
+
+    case "steps": {
+      const element: StepsElement = {
+        id: createId("el"),
+        name: "Steps",
+        type: "steps",
+        rect: centredRect(canvas, 0.42, 0.44, index),
+        layer: index,
+        from: 0,
+        durationInFrames: null,
+        locked: false,
+        hidden: false,
+        style: { ...BASE_STYLE },
+        animations: [],
+        content: {
+          steps: [
+            { title: "Request", detail: "The client calls the gateway." },
+            { title: "Authorise", detail: "The token is verified." },
+            { title: "Respond", detail: "The service returns the payload." },
+          ],
+          orientation: "vertical",
+          numbered: true,
+          connector: true,
+          fontSize: Math.round(canvas.height * 0.028),
+          detailFontSize: Math.round(canvas.height * 0.02),
+        },
+      };
+      return element;
+    }
+
     case "image": {
       const element: ImageElement = {
         id: createId("el"),
@@ -226,6 +382,11 @@ export const ELEMENT_LABELS: Record<ElementType, string> = {
   image: "Image",
   node: "Node",
   connector: "Connector",
+  counter: "Counter",
+  progress: "Progress",
+  chart: "Bar chart",
+  comparison: "Comparison",
+  steps: "Steps",
 };
 
 /** A new animation of the given type, with sensible starting values. */
@@ -271,6 +432,8 @@ export function createAnimation(type: AnimationType): Animation {
         easing: "linear",
         staggerInFrames: 4,
       };
+    case "count":
+      return { ...base, type: "count", durationInFrames: 45, easing: "easeOut" };
     case "focus":
       return {
         ...base,

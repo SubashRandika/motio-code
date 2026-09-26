@@ -14,6 +14,7 @@ import { applyEasing, clamp01 } from "./easing";
  * - `revealProgress` takes the most restrictive (smallest) value.
  * - `flow` takes the last one declared; two markers on one route would just
  *   obscure each other, so the most recent wins rather than compounding.
+ * - `valueProgress` takes the most restrictive (smallest) value, like the reveal.
  * - `focus` takes the one whose window started most recently, because a chain
  *   of them is a walkthrough: each step takes over when it begins. Declaration
  *   order is deliberately *not* what decides it -- every earlier step sits at
@@ -33,6 +34,11 @@ export interface ElementRenderState {
   revealProgress: number;
   /** Frames between consecutive parts of a progressive reveal. */
   revealStaggerInFrames: number;
+  /**
+   * 0-1 progress towards an element's own stored numbers. The element multiplies
+   * its data by this, so a finished animation always reads the true value.
+   */
+  valueProgress: number;
   /** The part range in force, if a focus has begun. Parts are 1-based. */
   focus: {
     fromPart: number;
@@ -62,6 +68,7 @@ const IDENTITY: ElementRenderState = {
   highlight: null,
   revealProgress: 1,
   revealStaggerInFrames: 0,
+  valueProgress: 1,
   focus: null,
   flow: null,
 };
@@ -212,6 +219,10 @@ export function resolveElementState(
           state.revealStaggerInFrames,
           animation.staggerInFrames,
         );
+        break;
+      }
+      case "count": {
+        state.valueProgress = Math.min(state.valueProgress, progress);
         break;
       }
       case "focus": {

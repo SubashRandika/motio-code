@@ -2,13 +2,18 @@
 
 import {
   ArrowRight,
+  BarChart3,
   Box,
   ChevronDown,
   ChevronUp,
   Code2,
+  Columns2,
   Eye,
   EyeOff,
+  Gauge,
+  Hash,
   Image as ImageIcon,
+  ListOrdered,
   Lock,
   MessageSquare,
   Square,
@@ -30,6 +35,11 @@ const ELEMENT_ICONS: Record<ElementType, typeof Type> = {
   image: ImageIcon,
   node: Box,
   connector: ArrowRight,
+  counter: Hash,
+  progress: Gauge,
+  chart: BarChart3,
+  comparison: Columns2,
+  steps: ListOrdered,
 };
 
 export function ElementRail() {

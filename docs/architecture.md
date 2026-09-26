@@ -29,6 +29,7 @@ core/editing/     geometry (resize, snap, align, marquee) and history (bounded u
 core/diagram/     connector routing, layered layout, the Mermaid-subset parser, compile
 core/code/        syntax tokens, the cached highlighter, reveal arithmetic
 core/presets/     the named animation presets, written in terms of the model above
+core/infographic/ locale-free number formatting, chart scaling, value animation
 ```
 
 ## The timing model
@@ -354,6 +355,62 @@ preset that silently created elements, so the scope is part of a preset's type a
 the store takes a different path for each. Both label their panels through the
 existing window bar rather than adding text elements to be kept in sync.
 
+## Infographics
+
+Five element kinds: `counter`, `progress`, `chart`, `comparison`, `steps`. They
+join the element union and nothing else in the engine changes, which is the test
+of whether the union was the right extension point.
+
+`steps` covers two of AGENTS.md's bullets. Laid out downwards it is a process;
+laid out across with its joining line on it is a timeline. They are the same data
+in two orientations, so there is one element rather than two that would drift
+apart.
+
+### The data is the source of truth
+
+AGENTS.md requires that "animated values and chart representations remain
+faithful to the underlying data". That rules out the obvious design, an animation
+carrying its own `from` and `to`: the moment a user edits the counter's value, the
+animation would still be counting to the old one, and the slide would show a
+figure that is not in the project.
+
+So the `count` animation carries **no target at all** — only progress. The element
+multiplies its own stored numbers by that progress. The last frame therefore shows
+exactly what is stored, by construction rather than by being kept in step. A
+bar's length and the figure printed beside it are derived from the same number, so
+they cannot disagree.
+
+### Two axes, not one knob
+
+- **`count` animates magnitude.** `valueProgress` scales every number in the
+  element towards its stored value, all together.
+- **`reveal` animates presence.** Parts arrive in sequence, and the part in flight
+  is drawn part-way rather than popped in, so a bar grows as it appears.
+
+A part's factor is the product of the two, so they compose with no special case:
+with neither animation every factor is 1 and the element simply shows its data.
+`partFactors` is built on the same `resolveReveal` the code panel used, so
+"which parts are in" has one implementation across the whole product.
+
+### Number formatting is locale-free
+
+`formatNumber` groups thousands itself rather than calling `toLocaleString`. The
+browser, the test runner and a headless renderer can disagree about the current
+locale, and a figure that reads "1,200" in the editor and "1 200" in the export
+would be a rendering bug nobody could reproduce. Decimals are fixed-width for the
+same reason a counter uses tabular figures: so the number does not change width
+while it counts.
+
+Non-finite input formats as zero. A chart is a thing people put on a slide, and
+"NaN" on a slide is worse than a wrong-looking zero.
+
+### What is deliberately missing
+
+No axes, gridlines, legends, stacked or grouped series, pie charts or
+trend lines. AGENTS.md asks for "basic bar charts" and warns against building a
+charting platform; a labelled bar is what a technical slide actually needs. The
+element's schema is the place to grow when that stops being true.
+
 ## Schema evolution
 
 Stored scenes outlive the code that wrote them. Two rules:
@@ -369,6 +426,12 @@ Stored scenes outlive the code that wrote them. Two rules:
 A connector is excluded from `createElement`'s input type rather than left as a
 branch that could only produce an invalid element — it is drawn between two
 existing nodes, never added from the rail.
+
+Two exhaustive maps and one `never` assignment do the enforcing. `ELEMENT_LABELS`
+and `ELEMENT_ICONS` are `Record<ElementType, …>`, and `ElementContent` ends by
+assigning the narrowed element to `never`. A new element kind therefore fails to
+compile in three places until it has a label, an icon and something to draw,
+instead of quietly rendering nothing.
 
 ## Design system
 

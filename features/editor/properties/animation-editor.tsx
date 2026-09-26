@@ -6,11 +6,13 @@ import {
   ANIMATION_TYPES,
   DIRECTIONS,
   EASINGS,
+  isNumeric,
   type Animation,
   type AnimationType,
   type SceneElement,
 } from "@/core/model";
 import { formatDuration } from "@/lib/utils/format";
+import { cn } from "@/lib/utils/cn";
 
 import { useEditorStore } from "../store-provider";
 import { NumberField, Row, SelectField, Section } from "./controls";
@@ -24,6 +26,7 @@ const TYPE_LABELS: Record<AnimationType, string> = {
   reveal: "Reveal",
   flow: "Flow along route",
   focus: "Focus lines",
+  count: "Count up",
 };
 
 const TRIGGER_OPTIONS = [
@@ -224,6 +227,19 @@ function AnimationFields({
           suffix="f"
           onChange={(staggerInFrames) => patch({ staggerInFrames }, "stagger")}
         />
+      ) : null}
+
+      {animation.type === "count" ? (
+        <p
+          className={cn(
+            "text-[11px] leading-relaxed",
+            isNumeric(element) ? "text-mist-dim" : "text-amber",
+          )}
+        >
+          {isNumeric(element)
+            ? "Counts this element's numbers up to the values it stores."
+            : "This element has no numbers to count. Only a counter, a progress indicator or a chart reads this."}
+        </p>
       ) : null}
 
       {animation.type === "focus" ? (

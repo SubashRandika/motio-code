@@ -113,6 +113,21 @@ export const focusAnimationSchema = z.object({
   accent: hexColorSchema.default("#F2A63B"),
 });
 
+/**
+ * Counts an element's numeric content towards its stored value.
+ *
+ * It carries no target of its own -- only progress. The element multiplies its
+ * own data by that progress, so what the viewer reads at the end of the
+ * animation is exactly what is stored. An animation that carried its own `to`
+ * could drift from the data it claims to show.
+ */
+export const countAnimationSchema = z.object({
+  ...baseAnimation,
+  type: z.literal("count"),
+  durationInFrames: frameCountSchema.min(1).default(45),
+  easing: easingSchema.default("easeOut"),
+});
+
 export const animationSchema = z.discriminatedUnion("type", [
   fadeAnimationSchema,
   slideAnimationSchema,
@@ -122,6 +137,7 @@ export const animationSchema = z.discriminatedUnion("type", [
   revealAnimationSchema,
   flowAnimationSchema,
   focusAnimationSchema,
+  countAnimationSchema,
 ]);
 
 export type Animation = z.infer<typeof animationSchema>;
@@ -136,6 +152,7 @@ export const ANIMATION_TYPES: AnimationType[] = [
   "reveal",
   "flow",
   "focus",
+  "count",
 ];
 
 /** How a scene enters from the one before it. */
