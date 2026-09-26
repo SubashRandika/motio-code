@@ -30,6 +30,7 @@ core/diagram/     connector routing, layered layout, the Mermaid-subset parser, 
 core/code/        syntax tokens, the cached highlighter, reveal arithmetic
 core/presets/     the named animation presets, written in terms of the model above
 core/infographic/ locale-free number formatting, chart scaling, value animation
+core/templates/   the ten starter templates, as functions from a canvas to scenes
 ```
 
 ## The timing model
@@ -348,6 +349,12 @@ preset means "make this read like a typewriter", and layering that onto whatever
 was already there would produce something nobody asked for. The panel says so
 before the user clicks.
 
+The animations themselves are built by the constructors in
+`core/animation/build.ts`, which the templates use as well. `createAnimation(type)`
+in the model gives a *default* animation for the properties panel to edit; these
+take the values the caller actually wants. One home for them means a preset and a
+template cannot disagree about what a fade is.
+
 Two of the six are scene-scoped. A before-and-after comparison and a sequential
 transformation are not one element animating; they are two panels arranged in
 space or in time. Modelling them as element presets would have meant an element
@@ -410,6 +417,64 @@ No axes, gridlines, legends, stacked or grouped series, pie charts or
 trend lines. AGENTS.md asks for "basic bar charts" and warns against building a
 charting platform; a labelled bar is what a technical slide actually needs. The
 element's schema is the place to grow when that stops being true.
+
+## Templates
+
+### Code, not stored data
+
+A template is a function from a canvas to scenes. It runs once, when a project is
+created, and after that the user owns ordinary scenes that know nothing about
+where they came from.
+
+The alternative -- a table of template JSON -- would have to be migrated every
+time the element schema grew, and could hold an element shape the current code
+can no longer render. For a fixed set of starting points that is cost with no
+benefit. The trade-off flips the moment users can save their own templates, which
+is a later phase; `projects.template_id` already records which one a project
+started from, so nothing has to change to find out.
+
+The id is the stable part. It is stored on the project, so renaming a template is
+free but changing its id is not.
+
+### Two rules the builders enforce
+
+1. **A template never writes an element literal.** Everything goes through
+   `createElement` and is then patched, so a template cannot produce an element
+   the schema would reject, and a newly required field gets a value for free.
+2. **A template never writes a pixel.** Positions are fractions of the canvas, and
+   durations are seconds converted at the project's frame rate. A template with
+   hard-coded pixels would be unusable on three of the four aspect ratios the
+   product offers, and one with hard-coded frame counts would run at the wrong
+   speed at 60fps.
+
+`tests/core/templates.test.ts` builds every template on every aspect ratio and
+checks that nothing lands off the canvas, that every animation finishes inside its
+scene, and that ids are fresh on each build.
+
+### Diagrams come from their own text
+
+A diagram template supplies only a Mermaid-subset definition. Layout and routing
+come from the same code path the diagram panel uses, and the definition is stored
+on the scene, so the user can open the text panel and keep editing it. A template
+whose definition does not parse throws rather than degrading -- that is a bug in
+the template, and a silent empty scene would hide it.
+
+Boxes are staggered by an increasing fade offset rather than by a reveal, so every
+element stays present for the whole scene. A route is drawn only once both of the
+boxes it joins have arrived, and its flow marker only once the route itself is
+drawn, so an arrow never appears before the thing it points at.
+
+### A layout that fits
+
+Adding the templates exposed a real defect in `layeredLayout`: it centred a graph
+without checking that the graph fitted. A six-node `flowchart LR` needs roughly
+twice the width of a 1080-wide portrait canvas, so half of it sat at negative
+coordinates -- off the stage, and awkward to drag back.
+
+It now scales the layout uniformly to fit inside a 4% margin, and `compileDiagram`
+scales the node label size by the same factor so text stays in proportion to its
+box. A graph that already fits is never enlarged. This was not a template problem:
+any user writing a wide flowchart on a portrait canvas hit it.
 
 ## Schema evolution
 

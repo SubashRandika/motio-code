@@ -74,11 +74,15 @@ export function compileDiagram(
     return { id: node.key, ...size };
   });
 
-  const placed = layeredLayout(
+  const { rects: placed, scale } = layeredLayout(
     layoutNodes,
     parsed.edges.map((edge) => ({ source: edge.source, target: edge.target })),
     { direction: parsed.direction, canvas },
   );
+
+  // A graph that had to be shrunk to fit gets labels shrunk by the same factor,
+  // so the text stays in proportion to the box around it.
+  const scaledFontSize = Math.max(10, Math.round(fontSize * scale));
 
   const nodes: NodeElement[] = parsed.nodes.map((parsedNode, index) => {
     const laidOut = placed.get(parsedNode.key) ?? {
@@ -132,7 +136,7 @@ export function compileDiagram(
         shape: parsedNode.shape,
         icon: "none",
         accent: null,
-        fontSize,
+        fontSize: scaledFontSize,
         align: "center",
         sourceKey: parsedNode.key,
       },

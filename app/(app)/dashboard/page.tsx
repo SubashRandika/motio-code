@@ -6,6 +6,7 @@ import { EmptyState, PageHeading } from "@/components/ui/panel";
 import { requireUser } from "@/features/auth/session";
 import { ProjectCard } from "@/features/projects/project-card";
 import { listProjects } from "@/features/projects/queries";
+import { TemplateStrip } from "@/features/projects/template-strip";
 
 export const metadata: Metadata = { title: "Projects" };
 
@@ -44,6 +45,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           />
         </div>
       </form>
+
+      <div className="mt-6">
+        <TemplateStrip />
+      </div>
 
       <div className="mt-6">
         {projects.length === 0 ? (

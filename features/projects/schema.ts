@@ -15,6 +15,17 @@ export const createProjectSchema = z.object({
   contentType: z.enum(CONTENT_TYPES).default("mixed"),
   aspectRatio: z.enum(ASPECT_RATIOS).default("16:9"),
   fps: z.coerce.number().int().min(12).max(60).default(30),
+  /**
+   * A starter template's id, or null for a blank project. An id the catalogue
+   * does not know is treated as blank rather than rejected: the form is the only
+   * thing that supplies it, and a stale one should not block creating a project.
+   */
+  templateId: z
+    .string()
+    .max(80)
+    .transform((value) => (value.trim() === "" ? null : value.trim()))
+    .nullable()
+    .default(null),
 });
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;

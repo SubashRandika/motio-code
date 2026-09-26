@@ -216,8 +216,11 @@ describe("layeredLayout", () => {
     { source: "A", target: "C" },
   ];
 
+  const layout = (direction: "TB" | "BT" | "LR" | "RL", nodeList = nodes) =>
+    layeredLayout(nodeList, edges, { direction, canvas }).rects;
+
   it("stacks ranks downward for TB", () => {
-    const placed = layeredLayout(nodes, edges, { direction: "TB", canvas });
+    const placed = layout("TB");
 
     expect(placed.get("B")!.y).toBeGreaterThan(placed.get("A")!.y);
     // Siblings share a rank, so they sit on the same row.
@@ -226,23 +229,19 @@ describe("layeredLayout", () => {
   });
 
   it("runs ranks rightward for LR", () => {
-    const placed = layeredLayout(nodes, edges, { direction: "LR", canvas });
+    const placed = layout("LR");
 
     expect(placed.get("B")!.x).toBeGreaterThan(placed.get("A")!.x);
     expect(placed.get("B")!.x).toBe(placed.get("C")!.x);
   });
 
   it("reverses for BT and RL", () => {
-    expect(layeredLayout(nodes, edges, { direction: "BT", canvas }).get("B")!.y).toBeLessThan(
-      layeredLayout(nodes, edges, { direction: "BT", canvas }).get("A")!.y,
-    );
-    expect(layeredLayout(nodes, edges, { direction: "RL", canvas }).get("B")!.x).toBeLessThan(
-      layeredLayout(nodes, edges, { direction: "RL", canvas }).get("A")!.x,
-    );
+    expect(layout("BT").get("B")!.y).toBeLessThan(layout("BT").get("A")!.y);
+    expect(layout("RL").get("B")!.x).toBeLessThan(layout("RL").get("A")!.x);
   });
 
   it("keeps every node on the canvas", () => {
-    const placed = layeredLayout(nodes, edges, { direction: "TB", canvas });
+    const placed = layout("TB");
 
     for (const rect of placed.values()) {
       expect(rect.x).toBeGreaterThanOrEqual(0);
@@ -253,8 +252,8 @@ describe("layeredLayout", () => {
   });
 
   it("produces integer coordinates and is deterministic", () => {
-    const once = layeredLayout(nodes, edges, { direction: "TB", canvas });
-    const twice = layeredLayout(nodes, edges, { direction: "TB", canvas });
+    const once = layout("TB");
+    const twice = layout("TB");
 
     expect([...once.entries()]).toEqual([...twice.entries()]);
     for (const rect of once.values()) {
@@ -264,7 +263,75 @@ describe("layeredLayout", () => {
   });
 
   it("returns nothing for no nodes", () => {
-    expect(layeredLayout([], [], { direction: "TB", canvas }).size).toBe(0);
+    const empty = layeredLayout([], [], { direction: "TB", canvas });
+    expect(empty.rects.size).toBe(0);
+    expect(empty.scale).toBe(1);
+  });
+
+  it("leaves a graph that already fits at its natural size", () => {
+    const result = layeredLayout(nodes, edges, { direction: "TB", canvas });
+
+    expect(result.scale).toBe(1);
+    expect(result.rects.get("A")!.width).toBe(200);
+  });
+
+  it("shrinks a graph too wide for the canvas instead of running off it", () => {
+    // A chain long enough that its natural width exceeds the canvas: a layout
+    // that only centred would put the first nodes at negative coordinates.
+    const chain = Array.from({ length: 9 }, (_, index) => ({
+      id: `n${index}`,
+      width: 300,
+      height: 120,
+    }));
+    const links = chain.slice(1).map((node, index) => ({
+      source: chain[index].id,
+      target: node.id,
+    }));
+
+    const result = layeredLayout(chain, links, { direction: "LR", canvas });
+
+    expect(result.scale).toBeLessThan(1);
+    for (const rect of result.rects.values()) {
+      expect(rect.x).toBeGreaterThanOrEqual(0);
+      expect(rect.x + rect.width).toBeLessThanOrEqual(canvas.width);
+      expect(rect.width).toBeLessThan(300);
+    }
+  });
+
+  it("shrinks a rank too tall for the canvas as well", () => {
+    // Twelve siblings of one parent overflow the cross axis, not the main one.
+    const siblings = Array.from({ length: 12 }, (_, index) => ({
+      id: `s${index}`,
+      width: 220,
+      height: 160,
+    }));
+    const fromRoot = siblings.slice(1).map((node) => ({ source: siblings[0].id, target: node.id }));
+
+    const result = layeredLayout(siblings, fromRoot, { direction: "TB", canvas });
+
+    expect(result.scale).toBeLessThan(1);
+    for (const rect of result.rects.values()) {
+      expect(rect.x).toBeGreaterThanOrEqual(0);
+      expect(rect.x + rect.width).toBeLessThanOrEqual(canvas.width);
+    }
+  });
+
+  it("keeps the shrunk graph centred rather than pushed into a corner", () => {
+    const chain = Array.from({ length: 9 }, (_, index) => ({
+      id: `n${index}`,
+      width: 300,
+      height: 120,
+    }));
+    const links = chain.slice(1).map((node, index) => ({
+      source: chain[index].id,
+      target: node.id,
+    }));
+
+    const rects = [...layeredLayout(chain, links, { direction: "LR", canvas }).rects.values()];
+    const left = Math.min(...rects.map((rect) => rect.x));
+    const right = canvas.width - Math.max(...rects.map((rect) => rect.x + rect.width));
+
+    expect(Math.abs(left - right)).toBeLessThanOrEqual(2);
   });
 });
 

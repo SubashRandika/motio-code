@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { z } from "zod";
 
 import { createBlankProjectDraft, createUuid } from "@/core/model";
+import { findTemplate } from "@/core/templates";
 import { requireUser } from "@/features/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,6 +42,7 @@ export async function createProjectAction(
     contentType: formData.get("contentType"),
     aspectRatio: formData.get("aspectRatio"),
     fps: formData.get("fps"),
+    templateId: formData.get("templateId"),
   });
 
   if (!parsed.success) {
@@ -48,6 +50,15 @@ export async function createProjectAction(
   }
 
   const draft = createBlankProjectDraft(parsed.data);
+
+  // A template is code, so it runs here once and the user then owns ordinary
+  // scenes. Building it on the server keeps the client out of deciding what a
+  // project starts as.
+  const template = parsed.data.templateId ? findTemplate(parsed.data.templateId) : null;
+  const scenes = template
+    ? template.build({ canvas: draft.canvas, theme: draft.theme })
+    : draft.scenes;
+
   const supabase = await createClient();
   const projectId = createUuid();
 
@@ -59,6 +70,7 @@ export async function createProjectAction(
     canvas_config: draft.canvas,
     theme_config: draft.theme,
     export_config: draft.export,
+    template_id: template?.id ?? null,
     last_opened_at: new Date().toISOString(),
   });
 
@@ -67,7 +79,7 @@ export async function createProjectAction(
   }
 
   const { error: sceneError } = await supabase.from("project_scenes").insert(
-    draft.scenes.map((scene) => ({
+    scenes.map((scene) => ({
       id: scene.id,
       project_id: projectId,
       // Overwritten by the sync_scene_owner trigger; required by the types.

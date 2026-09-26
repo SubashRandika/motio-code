@@ -9,6 +9,7 @@ import { Field, FormError, Input, Select } from "@/components/ui/field";
 import { Panel } from "@/components/ui/panel";
 import { ASPECT_RATIOS, CANVAS_PRESETS, FPS_OPTIONS } from "@/core/model/canvas";
 import type { ContentType } from "@/core/model/project";
+import { templatesFor } from "@/core/templates";
 import { cn } from "@/lib/utils/cn";
 
 import { createProjectAction, type ActionState } from "./actions";
@@ -27,10 +28,26 @@ const CONTENT_CHOICES: {
   { value: "mixed", label: "Mixed", hint: "A bit of everything", icon: Layers },
 ];
 
-export function NewProjectForm() {
+export function NewProjectForm({
+  initialTemplateId = "",
+  initialContentType = "code",
+}: {
+  /** Preselected when arriving from a template link. */
+  initialTemplateId?: string;
+  initialContentType?: ContentType;
+} = {}) {
   const [state, formAction] = useActionState(createProjectAction, EMPTY);
-  const [contentType, setContentType] = useState<ContentType>("code");
+  const [contentType, setContentType] = useState<ContentType>(initialContentType);
   const [aspectRatio, setAspectRatio] = useState<(typeof ASPECT_RATIOS)[number]>("16:9");
+  const [templateId, setTemplateId] = useState(initialTemplateId);
+
+  const templates = templatesFor(contentType);
+  // Derived rather than reset in an effect: changing the content type changes
+  // which templates are on offer, and a selection that is no longer among them
+  // simply is not selected.
+  const selectedTemplate = templates.some((template) => template.id === templateId)
+    ? templateId
+    : "";
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
@@ -79,6 +96,32 @@ export function NewProjectForm() {
               <span className="text-[14px] font-medium">{choice.label}</span>
               <span className="text-[12px] leading-snug text-mist-dim">{choice.hint}</span>
             </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend className="text-[13px] font-medium text-mist">Start from</legend>
+        <p className="mt-1 text-[12px] text-mist-dim">
+          A template fills the project with editable scenes. Nothing in one is fixed.
+        </p>
+        <div className="mt-2.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <TemplateCard
+            name="Blank project"
+            description="One empty scene. Add what you need from the editor."
+            value=""
+            selected={selectedTemplate === ""}
+            onSelect={setTemplateId}
+          />
+          {templates.map((template) => (
+            <TemplateCard
+              key={template.id}
+              name={template.name}
+              description={template.description}
+              value={template.id}
+              selected={selectedTemplate === template.id}
+              onSelect={setTemplateId}
+            />
           ))}
         </div>
       </fieldset>
@@ -143,6 +186,40 @@ export function NewProjectForm() {
         <SubmitButton />
       </div>
     </form>
+  );
+}
+
+function TemplateCard({
+  name,
+  description,
+  value,
+  selected,
+  onSelect,
+}: {
+  name: string;
+  description: string;
+  value: string;
+  selected: boolean;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer flex-col gap-1.5 rounded-panel border bg-panel p-4 transition-colors duration-150",
+        selected ? "border-amber bg-amber-wash" : "border-line hover:border-line-strong",
+      )}
+    >
+      <input
+        type="radio"
+        name="templateId"
+        value={value}
+        checked={selected}
+        onChange={() => onSelect(value)}
+        className="sr-only"
+      />
+      <span className="text-[14px] font-medium">{name}</span>
+      <span className="text-[12px] leading-snug text-mist-dim">{description}</span>
+    </label>
   );
 }
 

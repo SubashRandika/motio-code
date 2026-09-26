@@ -1,9 +1,15 @@
-import { elementEndFrame } from "@/core/animation";
+import {
+  elementEndFrame,
+  fadeIn,
+  fadeOut,
+  focusRange,
+  revealParts,
+  slideFrom,
+} from "@/core/animation";
 import { codeLines, typewriterFrames } from "@/core/code";
 import {
   createId,
   type Animation,
-  type AnimationTrigger,
   type CanvasConfig,
   type CodeElement,
   type ElementType,
@@ -76,70 +82,6 @@ function life(element: SceneElement, context: PresetContext): number {
   return Math.max(1, end - element.from);
 }
 
-function fade(
-  durationInFrames: number,
-  options: { trigger?: AnimationTrigger; offsetInFrames?: number } = {},
-): Animation {
-  return {
-    id: createId("an"),
-    type: "fade",
-    trigger: options.trigger ?? "enter",
-    offsetInFrames: options.offsetInFrames ?? 0,
-    durationInFrames: Math.max(1, Math.round(durationInFrames)),
-    easing: "easeOut",
-    from: 0,
-    to: 1,
-  };
-}
-
-function reveal(durationInFrames: number, staggerInFrames: number): Animation {
-  return {
-    id: createId("an"),
-    type: "reveal",
-    trigger: "enter",
-    offsetInFrames: 0,
-    // Linear, always: a reveal that eases would type quickly then crawl.
-    easing: "linear",
-    durationInFrames: Math.max(1, Math.round(durationInFrames)),
-    staggerInFrames: Math.max(0, Math.round(staggerInFrames)),
-  };
-}
-
-function focus(options: {
-  offsetInFrames: number;
-  durationInFrames: number;
-  fromPart: number;
-  toPart: number;
-  dim: number;
-  accent: string;
-}): Animation {
-  return {
-    id: createId("an"),
-    type: "focus",
-    trigger: "at",
-    easing: "easeOut",
-    offsetInFrames: Math.max(0, Math.round(options.offsetInFrames)),
-    durationInFrames: Math.max(1, Math.round(options.durationInFrames)),
-    fromPart: Math.max(1, Math.round(options.fromPart)),
-    toPart: Math.max(1, Math.round(options.toPart)),
-    dim: options.dim,
-    accent: options.accent,
-  };
-}
-
-function slide(durationInFrames: number, direction: "left" | "right", distance: number): Animation {
-  return {
-    id: createId("an"),
-    type: "slide",
-    trigger: "enter",
-    offsetInFrames: 0,
-    durationInFrames: Math.max(1, Math.round(durationInFrames)),
-    easing: "easeOut",
-    direction,
-    distance,
-  };
-}
-
 /** The lines a focus should land on when the user has not said. */
 function middleRange(lineCount: number): { fromPart: number; toPart: number } {
   if (lineCount <= 2) return { fromPart: 1, toPart: lineCount };
@@ -194,7 +136,7 @@ const typewriter: ElementPreset = {
     return {
       ...element,
       content: { ...element.content, revealUnit: "character", showCaret: true },
-      animations: [reveal(duration, 0)],
+      animations: [revealParts(duration)],
     };
   },
 };
@@ -217,8 +159,8 @@ const lineByLine: ElementPreset = {
       ...element,
       content: { ...element.content, revealUnit: "line", showCaret: false },
       animations: [
-        fade(Math.min(Math.round(context.fps * 0.3), available)),
-        reveal(duration, duration / Math.max(1, lineCount)),
+        fadeIn(Math.min(Math.round(context.fps * 0.3), available)),
+        revealParts(duration, duration / Math.max(1, lineCount)),
       ],
     };
   },
@@ -246,8 +188,8 @@ const highlightAndExplain: ElementPreset = {
     return {
       ...element,
       animations: [
-        fade(Math.min(settle, available)),
-        focus({
+        fadeIn(Math.min(settle, available)),
+        focusRange({
           ...range,
           offsetInFrames: Math.min(Math.round(available * 0.2), Math.max(0, available - 1)),
           durationInFrames: Math.min(settle, available),
@@ -282,7 +224,7 @@ const walkthrough: ElementPreset = {
     const perStep = Math.max(1, Math.floor((available - revealLength) / steps));
 
     const stepFocus = Array.from({ length: steps }, (_, index) =>
-      focus({
+      focusRange({
         offsetInFrames: revealLength + index * perStep,
         durationInFrames: Math.min(Math.max(2, Math.round(context.fps * 0.25)), perStep),
         fromPart: index * group + 1,
@@ -295,7 +237,7 @@ const walkthrough: ElementPreset = {
     return {
       ...element,
       content: { ...element.content, revealUnit: "line", showCaret: false },
-      animations: [reveal(revealLength, revealLength / Math.max(1, lineCount)), ...stepFocus],
+      animations: [revealParts(revealLength, revealLength / Math.max(1, lineCount)), ...stepFocus],
     };
   },
 };
@@ -325,7 +267,7 @@ const beforeAndAfter: ScenePreset = {
       rect: { x: gutter, y, width, height },
       from: 0,
       durationInFrames: null,
-      animations: [fade(settle), slide(settle, "left", travel)],
+      animations: [fadeIn(settle), slideFrom("left", settle, travel)],
     });
 
     const after = codePanel(element, {
@@ -334,7 +276,7 @@ const beforeAndAfter: ScenePreset = {
       rect: { x: gutter * 2 + width, y, width, height },
       from: arrive,
       durationInFrames: null,
-      animations: [fade(settle), slide(settle, "right", travel)],
+      animations: [fadeIn(settle), slideFrom("right", settle, travel)],
     });
 
     // The original is consumed by the pair rather than left behind as a third
@@ -363,7 +305,7 @@ const sequentialTransformation: ScenePreset = {
       titlePrefix: "Step 1",
       from: 0,
       durationInFrames: mid + crossfade,
-      animations: [fade(crossfade), fade(crossfade * 2, { trigger: "exit" })],
+      animations: [fadeIn(crossfade), fadeOut(crossfade * 2)],
     });
 
     const second = codePanel(element, {
@@ -371,7 +313,7 @@ const sequentialTransformation: ScenePreset = {
       titlePrefix: "Step 2",
       from: mid - crossfade,
       durationInFrames: null,
-      animations: [fade(crossfade * 2)],
+      animations: [fadeIn(crossfade * 2)],
     });
 
     return [...elements.filter((item) => item.id !== element.id), first, second];

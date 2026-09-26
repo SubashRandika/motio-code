@@ -4,9 +4,11 @@ import { create } from "zustand";
 
 import {
   alignRects,
+  assignLayers,
   emptyHistory,
   record,
   redo as redoHistory,
+  relayer,
   undo as undoHistory,
   type Alignment,
   type History,
@@ -172,22 +174,6 @@ function withElements(
     ...scene,
     data: { ...scene.data, elements: fn(scene.data.elements) },
   }));
-}
-
-/**
- * Numbers layers from the array's own order. The caller has already put the
- * elements where it wants them, so this must not re-sort.
- */
-function assignLayers(elements: SceneElement[]): SceneElement[] {
-  return elements.map((element, index) => ({ ...element, layer: index }));
-}
-
-/**
- * Closes gaps in the layer numbers after an add or a delete, keeping the
- * existing stacking order.
- */
-function relayer(elements: SceneElement[]): SceneElement[] {
-  return assignLayers([...elements].sort((a, b) => a.layer - b.layer));
 }
 
 export function createEditorStore(project: Project) {

@@ -54,8 +54,28 @@ export function rankNodes(nodes: LayoutNode[], edges: LayoutEdge[]): Map<string,
   return ranks;
 }
 
+/** Fraction of each canvas edge the graph keeps clear. */
+const MARGIN = 0.04;
+
+export interface LayeredLayout {
+  rects: Map<string, Rect>;
+  /**
+   * 1 when the graph fitted at its natural size, below 1 when it had to be
+   * shrunk. The caller scales label sizes by the same factor so text stays
+   * proportional to the box it sits in.
+   */
+  scale: number;
+}
+
 /**
- * Places nodes in ranks along the flow direction, centred on the canvas.
+ * Places nodes in ranks along the flow direction, centred on the canvas and
+ * shrunk to fit inside it.
+ *
+ * Fitting matters more than it sounds: a six-node `flowchart LR` needs roughly
+ * twice the width of a 1080-wide portrait canvas, and a layout that only centres
+ * puts half the graph at negative coordinates, off the stage and awkward to drag
+ * back. Scaling uniformly keeps the proportions, keeps everything reachable, and
+ * leaves the user free to rearrange -- the canvas owns positions, after all.
  *
  * This is the minimum needed to draw a graph that was written as text rather
  * than arranged by hand. It is deliberately not a general graph-layout engine:
@@ -65,9 +85,9 @@ export function layeredLayout(
   nodes: LayoutNode[],
   edges: LayoutEdge[],
   options: LayoutOptions,
-): Map<string, Rect> {
+): LayeredLayout {
   const placed = new Map<string, Rect>();
-  if (nodes.length === 0) return placed;
+  if (nodes.length === 0) return { rects: placed, scale: 1 };
 
   const { canvas, direction } = options;
   const rankGap = options.rankGap ?? Math.round(canvas.height * 0.09);
@@ -116,25 +136,35 @@ export function layeredLayout(
   const mainExtent = Math.max(0, mainCursor - rankGap);
   const crossMin = Math.min(...positions.map((entry) => entry.cross));
   const crossMax = Math.max(...positions.map((entry) => entry.cross + crossOf(entry.node)));
+  const crossExtent = crossMax - crossMin;
 
-  // Centre the whole graph on the canvas.
-  const mainOrigin = ((vertical ? canvas.height : canvas.width) - mainExtent) / 2;
-  const crossOrigin =
-    ((vertical ? canvas.width : canvas.height) - (crossMax - crossMin)) / 2 - crossMin;
+  const mainSpan = vertical ? canvas.height : canvas.width;
+  const crossSpan = vertical ? canvas.width : canvas.height;
+
+  // Shrink only if it does not fit; never enlarge a graph that already does.
+  const scale = Math.min(
+    1,
+    mainExtent > 0 ? (mainSpan * (1 - MARGIN * 2)) / mainExtent : 1,
+    crossExtent > 0 ? (crossSpan * (1 - MARGIN * 2)) / crossExtent : 1,
+  );
+
+  // Centre the scaled graph on the canvas.
+  const mainOrigin = (mainSpan - mainExtent * scale) / 2;
+  const crossOrigin = (crossSpan - crossExtent * scale) / 2 - crossMin * scale;
 
   for (const entry of positions) {
-    const main = Math.round(mainOrigin + entry.main);
-    const cross = Math.round(crossOrigin + entry.cross);
+    const main = Math.round(mainOrigin + entry.main * scale);
+    const cross = Math.round(crossOrigin + entry.cross * scale);
 
     placed.set(entry.node.id, {
       x: vertical ? cross : main,
       y: vertical ? main : cross,
-      width: entry.node.width,
-      height: entry.node.height,
+      width: Math.max(1, Math.round(entry.node.width * scale)),
+      height: Math.max(1, Math.round(entry.node.height * scale)),
     });
   }
 
-  return placed;
+  return { rects: placed, scale };
 }
 
 /**
