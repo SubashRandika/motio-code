@@ -19,6 +19,11 @@
 --        someone else's object. When server-side rendering lands, service_role
 --        writes that column.
 
+-- Postgres has no "create policy if not exists", and this migration may be
+-- applied by hand in the SQL editor before the CLI ever sees it, so the drop
+-- makes a second run a no-op instead of an error.
+drop policy if exists render_jobs_update_own on public.render_jobs;
+
 create policy render_jobs_update_own on public.render_jobs
   for update to authenticated
   using ((select auth.uid()) = owner_id)
