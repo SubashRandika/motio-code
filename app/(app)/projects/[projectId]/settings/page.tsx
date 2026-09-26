@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 
 import { Panel, PageHeading } from "@/components/ui/panel";
 import { requireUser } from "@/features/auth/session";
+import { ExportHistory } from "@/features/export/export-history";
+import { listRenderJobs } from "@/features/export/queries";
 import { ProjectSettingsForm } from "@/features/projects/project-settings-form";
 import { loadProject } from "@/features/projects/queries";
 import { formatRelativeTime } from "@/lib/utils/format";
@@ -19,6 +21,8 @@ export default async function ProjectSettingsPage({
 
   if (!project) notFound();
 
+  const renders = await listRenderJobs(projectId, user.id);
+
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
       <Link href={`/projects/${project.id}/editor`} className="text-[13px] text-mist hover:text-paper">
@@ -31,6 +35,15 @@ export default async function ProjectSettingsPage({
 
       <Panel className="mt-6 p-5">
         <ProjectSettingsForm projectId={project.id} projectName={project.name} />
+      </Panel>
+
+      <Panel className="mt-4 p-5">
+        <h2 className="text-[11px] font-medium tracking-[0.14em] text-mist-dim uppercase">
+          Exports
+        </h2>
+        <div className="mt-3">
+          <ExportHistory jobs={renders} />
+        </div>
       </Panel>
 
       <Panel className="mt-4 p-5">

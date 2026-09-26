@@ -6,14 +6,22 @@ import { exportConfigSchema, type Project } from "@/core/model";
 
 import { makeProject } from "../fixtures";
 
+// The export controls reach a server action, whose Supabase client is
+// server-only and refuses to load in a client module graph. This test is about
+// the preview, so the actions are stubbed out entirely.
+vi.mock("@/features/export/actions", () => ({
+  startRenderAction: vi.fn(async () => ({ jobId: "job-1" })),
+  finishRenderAction: vi.fn(async () => ({ ok: true })),
+}));
+
+const playerProps = vi.fn();
+
 /**
  * The Player needs real layout, which jsdom does not have. Standing in for it
  * records the contract we hand Remotion -- the composition, its dimensions, its
  * length and its frame rate -- which is the part that is ours to get right.
  * Whether the Player then plays it correctly is Remotion's own test suite.
  */
-const playerProps = vi.fn();
-
 vi.mock("@remotion/player", () => ({
   Player: (props: Record<string, unknown>) => {
     playerProps(props);

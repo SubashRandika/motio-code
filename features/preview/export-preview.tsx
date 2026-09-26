@@ -11,6 +11,7 @@ import {
   type Project,
 } from "@/core/model";
 import { planRender, renderDurationInSeconds } from "@/core/render";
+import { ExportControls } from "@/features/export/export-controls";
 
 import { MotioComposition } from "./motio-composition";
 
@@ -107,6 +108,8 @@ export function ExportPreview({ project, onClose }: { project: Project; onClose:
             ))}
           </fieldset>
         </div>
+
+        <ExportControls project={project} />
 
         {exportPlan.letterboxed ? (
           <p className="rounded-md border border-amber/30 bg-amber-wash px-3 py-2 text-[12px] leading-relaxed text-mist">

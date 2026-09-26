@@ -31,7 +31,7 @@ core/code/        syntax tokens, the cached highlighter, reveal arithmetic
 core/presets/     the named animation presets, written in terms of the model above
 core/infographic/ locale-free number formatting, chart scaling, value animation
 core/templates/   the ten starter templates, as functions from a canvas to scenes
-core/render/      the project-to-composition mapping: output size, frame rate, resampling
+core/render/      the project-to-composition mapping, plus the render job lifecycle
 ```
 
 ## The timing model
@@ -528,6 +528,65 @@ the Preview button is pressed.
 Draft preview quality renders the same composition at 720p. It changes nothing
 about the export -- only how many pixels the preview asks the browser for per
 frame, so a heavy project plays at its true speed instead of stuttering.
+
+### Exporting happens in the tab
+
+There is no render server. `@remotion/web-renderer` encodes through WebCodecs in
+the browser, which is what makes an export prototype possible at all without
+infrastructure -- and it decides the shape of the flow:
+
+- **A render can be refused before it starts.** `canRenderMediaOnWeb` reports
+  whether this browser can encode the requested container and codec at these
+  dimensions. An unsupported browser gets a sentence, not a failure several
+  minutes in, and **no job row**: a render that could never have run has no place
+  in export history.
+- **A render must be cancellable.** It runs on the user's own machine, so an
+  `AbortSignal` is wired through and a cancellation is recorded as an outcome
+  rather than as an error.
+- **GIF is refused, not substituted.** WebCodecs has no GIF container, so
+  `webRenderTarget` returns `null` for it and the UI says so. The format stays in
+  the project model -- projects may have it saved, and a server-side renderer can
+  produce one later -- but handing back an mp4 named `.gif` is not an option.
+- **Progress stays local.** The job row records that a render happened and how it
+  ended. Writing progress frame by frame would be a request per frame for a
+  number only that tab is looking at.
+
+The renderer is imported inside the render call, so `remotion`,
+`@remotion/web-renderer` and `mediabunny` are absent from every eager chunk of the
+editor route.
+
+### Download, not storage
+
+A browser render produces the file on the user's machine already, so it is handed
+straight to them and nothing is uploaded. `render_jobs` records what was exported,
+at which settings, and whether it worked; `output_path` stays null.
+
+The cost of that choice is that re-downloading means re-rendering. The cost of the
+alternative is storage and egress on every export, plus an upload the user waits
+through, for a file they already have. Export history answers "what have I
+exported and did it work", which is what §14 asks of it. When server-side
+rendering lands, that is the point at which `output_path` starts being written --
+by `service_role`, never by a client.
+
+### A job's status is written by its renderer
+
+Migration `0001` gave clients no UPDATE on `render_jobs`, on the assumption that a
+server-side service holding `service_role` would advance them. With the renderer
+in the browser, the owner's own session is the renderer and has to report the
+outcome, so `0004` adds an owner-scoped UPDATE policy.
+
+The grant is **column-scoped**, because RLS cannot restrict columns and these
+columns are not equal. `status`, `progress`, `error_message`, `started_at` and
+`completed_at` are render telemetry and belong to the renderer. `project_id` and
+`owner_id` decide whose row it is; `render_settings` is the record of what was
+asked for, so a rewritable one would make history a lie; and `output_path` names
+an object in storage, so a client-writable path is a way to aim a download at
+someone else's file. Those four stay unwritable by any client.
+
+Transitions are checked in `core/render/job.ts` against the row's current status
+rather than written blind, because a tab can vanish mid-render, a retry can report
+twice, and a cancellation can land after a success. A job that has ended stays as
+it ended.
 
 ### Licensing, before it becomes expensive
 
