@@ -5,6 +5,7 @@ import { ArrowDown, ArrowDownToLine, ArrowUp, ArrowUpToLine, Copy, Trash2 } from
 import { Label, Textarea } from "@/components/ui/field";
 import {
   CODE_LANGUAGES,
+  CODE_REVEAL_UNITS,
   CONNECTOR_ANCHORS,
   CONNECTOR_KINDS,
   DIAGRAM_NODE_SHAPES,
@@ -23,6 +24,7 @@ import {
 import { selectActiveScene } from "../store";
 import { useEditorStore } from "../store-provider";
 import { AnimationEditor } from "./animation-editor";
+import { PresetPicker } from "./preset-picker";
 import {
   ColorField,
   NumberField,
@@ -279,6 +281,7 @@ export function ElementProperties({
         )}
       </Section>
 
+      <PresetPicker element={element} />
       <AnimationEditor element={element} fps={fps} />
     </>
   );
@@ -643,6 +646,28 @@ function CodeContent({ element }: { element: CodeElement }) {
           onChange={(showWindowChrome) => patch({ showWindowChrome }, "chrome")}
         />
       </Row>
+
+      <Row>
+        <SelectField
+          label="Reveal counts"
+          value={element.content.revealUnit}
+          options={CODE_REVEAL_UNITS.map((unit) => ({
+            value: unit,
+            label: unit === "line" ? "Lines" : "Characters",
+          }))}
+          onChange={(revealUnit) => patch({ revealUnit }, "unit")}
+        />
+        <ToggleField
+          label="Typing caret"
+          checked={element.content.showCaret}
+          onChange={(showCaret) => patch({ showCaret }, "caret")}
+        />
+      </Row>
+
+      <p className="text-[11px] leading-relaxed text-mist-dim">
+        A reveal animation uses this. Characters give a typewriter; lines bring the code in a row at
+        a time.
+      </p>
     </Section>
   );
 }

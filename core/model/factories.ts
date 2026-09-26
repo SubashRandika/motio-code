@@ -134,6 +134,8 @@ export function createElement(
           showLineNumbers: true,
           highlightedLines: [],
           showWindowChrome: true,
+          revealUnit: "line",
+          showCaret: false,
         },
       };
       return element;
@@ -268,6 +270,18 @@ export function createAnimation(type: AnimationType): Animation {
         durationInFrames: 45,
         easing: "linear",
         staggerInFrames: 4,
+      };
+    case "focus":
+      return {
+        ...base,
+        type: "focus",
+        trigger: "at",
+        durationInFrames: 12,
+        easing: "easeOut",
+        fromPart: 1,
+        toPart: 1,
+        dim: 0.25,
+        accent: "#F2A63B",
       };
     case "flow":
       return {

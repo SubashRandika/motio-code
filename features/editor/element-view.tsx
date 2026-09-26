@@ -1,8 +1,9 @@
 "use client";
 
-import { resolveElementState, resolveReveal, type ElementRenderState } from "@/core/animation";
+import { resolveElementState, type ElementRenderState } from "@/core/animation";
 import type { SceneElement, ThemeConfig } from "@/core/model";
 
+import { CodeView } from "./code-view";
 import { NodeView } from "./node-view";
 
 /**
@@ -61,7 +62,7 @@ export function ElementView({
         cursor: element.locked ? "default" : "move",
       }}
     >
-      <ElementContent element={element} state={state} theme={theme} />
+      <ElementContent element={element} state={state} theme={theme} frame={frame} />
       {!isDiagramNode && state.highlight && state.highlight.strength > 0.01 ? (
         <span
           aria-hidden="true"
@@ -82,10 +83,12 @@ function ElementContent({
   element,
   state,
   theme,
+  frame,
 }: {
   element: SceneElement;
   state: ElementRenderState;
   theme: ThemeConfig;
+  frame: number;
 }) {
   switch (element.type) {
     case "text": {
@@ -131,77 +134,8 @@ function ElementContent({
       return null;
     }
 
-    case "code": {
-      const lines = element.content.code.split("\n");
-      const { shown, partialProgress } = resolveReveal(state, lines.length);
-
-      return (
-        <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-          {element.content.showWindowChrome ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 12px",
-                borderBottom: `1px solid ${theme.border}`,
-                color: theme.muted,
-                fontFamily: "var(--font-jetbrains)",
-                fontSize: Math.max(10, element.content.fontSize * 0.66),
-              }}
-            >
-              {element.content.title || element.content.language}
-            </div>
-          ) : null}
-
-          <pre
-            style={{
-              margin: 0,
-              padding: 12,
-              overflow: "hidden",
-              fontFamily: "var(--font-jetbrains)",
-              fontSize: element.content.fontSize,
-              lineHeight: element.content.lineHeight,
-              color: theme.text,
-            }}
-          >
-            <code>
-              {lines.map((line, index) => {
-                const lineOpacity =
-                  index < shown ? 1 : index === shown ? partialProgress : 0;
-                const highlighted = element.content.highlightedLines.includes(index + 1);
-
-                return (
-                  <div
-                    key={index}
-                    style={{
-                      display: "flex",
-                      opacity: lineOpacity,
-                      backgroundColor: highlighted ? `${theme.accent}22` : undefined,
-                    }}
-                  >
-                    {element.content.showLineNumbers ? (
-                      <span
-                        style={{
-                          width: "3ch",
-                          textAlign: "right",
-                          marginRight: "1.5ch",
-                          color: theme.muted,
-                          userSelect: "none",
-                        }}
-                      >
-                        {index + 1}
-                      </span>
-                    ) : null}
-                    <span>{line || " "}</span>
-                  </div>
-                );
-              })}
-            </code>
-          </pre>
-        </div>
-      );
-    }
+    case "code":
+      return <CodeView element={element} state={state} theme={theme} frame={frame} />;
 
     case "callout": {
       const tint =

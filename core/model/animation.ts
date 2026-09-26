@@ -92,6 +92,27 @@ export const flowAnimationSchema = z.object({
   size: z.number().min(2).max(64).default(12),
 });
 
+/**
+ * Draws attention to a range of an element's own parts -- code lines today,
+ * list rows later -- by dimming everything outside the range.
+ *
+ * The engine only names a range and a dim factor; the element decides what a
+ * "part" is, exactly as it does for `reveal`. Several focus animations on one
+ * element form a walkthrough: the one whose window has most recently started
+ * is the one in force.
+ */
+export const focusAnimationSchema = z.object({
+  ...baseAnimation,
+  type: z.literal("focus"),
+  durationInFrames: frameCountSchema.min(1).default(12),
+  /** 1-based, inclusive. */
+  fromPart: z.number().int().min(1).max(2000).default(1),
+  toPart: z.number().int().min(1).max(2000).default(1),
+  /** Opacity of the parts outside the range once the focus is fully in. */
+  dim: z.number().min(0).max(1).default(0.25),
+  accent: hexColorSchema.default("#F2A63B"),
+});
+
 export const animationSchema = z.discriminatedUnion("type", [
   fadeAnimationSchema,
   slideAnimationSchema,
@@ -100,6 +121,7 @@ export const animationSchema = z.discriminatedUnion("type", [
   emphasisAnimationSchema,
   revealAnimationSchema,
   flowAnimationSchema,
+  focusAnimationSchema,
 ]);
 
 export type Animation = z.infer<typeof animationSchema>;
@@ -113,6 +135,7 @@ export const ANIMATION_TYPES: AnimationType[] = [
   "emphasis",
   "reveal",
   "flow",
+  "focus",
 ];
 
 /** How a scene enters from the one before it. */

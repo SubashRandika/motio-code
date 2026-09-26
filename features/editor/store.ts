@@ -17,6 +17,7 @@ import {
   pruneDanglingConnectors,
   type DiagramParseIssue,
 } from "@/core/diagram";
+import { findPreset } from "@/core/presets";
 import {
   DEFAULT_SCENE_DURATION_IN_FRAMES,
   EMPTY_SCENE_DATA,
@@ -131,6 +132,12 @@ interface EditorActions {
     options?: EditOptions,
   ) => void;
   removeAnimation: (elementId: string, animationId: string) => void;
+  /**
+   * Applies a named preset to an element. An element-scoped preset replaces
+   * that element's animations; a scene-scoped one may split it into several.
+   * Either way it is a single undo step.
+   */
+  applyPreset: (elementId: string, presetId: string) => void;
 
   undo: () => void;
   redo: () => void;
@@ -768,6 +775,48 @@ export function createEditorStore(project: Project) {
             ),
           ),
         ),
+
+
+      applyPreset: (elementId, presetId) => {
+        const state = get();
+        const scene = selectActiveScene(state);
+        const preset = findPreset(presetId);
+        if (!scene || !preset) return;
+
+        const target = scene.data.elements.find((element) => element.id === elementId);
+        if (!target || !preset.appliesTo.includes(target.type)) return;
+
+        const context = {
+          canvas: state.project.canvas,
+          theme: state.project.theme,
+          sceneDurationInFrames: scene.durationInFrames,
+          fps: state.project.canvas.fps,
+        };
+
+        if (preset.scope === "element") {
+          edit(`Apply ${preset.label}`, (current) =>
+            withElements(current, scene.id, (elements) =>
+              elements.map((element) =>
+                element.id === elementId ? preset.apply(element, context) : element,
+              ),
+            ),
+          );
+          return;
+        }
+
+        // A scene preset rewrites the list, so layers are renumbered from the
+        // order it returns rather than from the numbers it inherited.
+        const next = relayer(preset.apply(target, scene.data.elements, context));
+
+        edit(`Apply ${preset.label}`, (current) =>
+          withElements(current, scene.id, () => next),
+        );
+
+        const survivors = new Set(next.map((element) => element.id));
+        set({
+          selectedElementIds: survivors.has(elementId) ? [elementId] : [],
+        });
+      },
 
       // -------------------------------------------------------------- history
       undo: () =>

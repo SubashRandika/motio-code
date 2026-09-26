@@ -14,6 +14,10 @@ import { applyEasing, clamp01 } from "./easing";
  * - `revealProgress` takes the most restrictive (smallest) value.
  * - `flow` takes the last one declared; two markers on one route would just
  *   obscure each other, so the most recent wins rather than compounding.
+ * - `focus` takes the one whose window started most recently, because a chain
+ *   of them is a walkthrough: each step takes over when it begins. Declaration
+ *   order is deliberately *not* what decides it -- every earlier step sits at
+ *   progress 1 forever, so "last declared" would freeze on the final step.
  *
  * Outside an animation's window the element holds that animation's start value
  * (before) or end value (after), so state is defined at every frame.
@@ -29,6 +33,16 @@ export interface ElementRenderState {
   revealProgress: number;
   /** Frames between consecutive parts of a progressive reveal. */
   revealStaggerInFrames: number;
+  /** The part range in force, if a focus has begun. Parts are 1-based. */
+  focus: {
+    fromPart: number;
+    toPart: number;
+    /** Opacity of the parts outside the range at full strength. */
+    dim: number;
+    accent: string;
+    /** 0-1 ramp, so a focus eases in rather than snapping. */
+    strength: number;
+  } | null;
   /** Marker travelling a diagram connector, if one is running. */
   flow: {
     /** 0-1 along the route, within the current traversal. */
@@ -48,6 +62,7 @@ const IDENTITY: ElementRenderState = {
   highlight: null,
   revealProgress: 1,
   revealStaggerInFrames: 0,
+  focus: null,
   flow: null,
 };
 
@@ -157,6 +172,9 @@ export function resolveElementState(
     return { ...state, opacity: 0 };
   }
 
+  // Tracks which focus is in force: the latest one to have started.
+  let focusStart = Number.NEGATIVE_INFINITY;
+
   for (const animation of element.animations) {
     const progress = animationProgress(animation, element, sceneFrame, sceneDurationInFrames);
 
@@ -196,6 +214,20 @@ export function resolveElementState(
         );
         break;
       }
+      case "focus": {
+        const { start } = animationWindow(animation, element, sceneDurationInFrames);
+        if (sceneFrame < start || start < focusStart) break;
+
+        focusStart = start;
+        state.focus = {
+          fromPart: Math.min(animation.fromPart, animation.toPart),
+          toPart: Math.max(animation.fromPart, animation.toPart),
+          dim: animation.dim,
+          accent: animation.accent,
+          strength: progress,
+        };
+        break;
+      }
       case "flow": {
         // Divide the window into equal traversals, then ease within each one.
         const raw = animationRawProgress(animation, element, sceneFrame, sceneDurationInFrames);
@@ -232,4 +264,28 @@ export function resolveReveal(
   const exact = state.revealProgress * partCount;
   const shown = Math.floor(exact);
   return { shown, partialProgress: exact - shown };
+}
+
+/**
+ * How a focus treats one part, given its 1-based index.
+ *
+ * Parts inside the range keep full opacity and gain an emphasis weight the
+ * renderer can tint with; parts outside fade towards the focus's dim level.
+ */
+export function resolveFocus(
+  state: ElementRenderState,
+  part: number,
+): { opacity: number; emphasis: number; accent: string | null } {
+  const { focus } = state;
+  if (!focus || focus.strength <= 0) return { opacity: 1, emphasis: 0, accent: null };
+
+  if (part >= focus.fromPart && part <= focus.toPart) {
+    return { opacity: 1, emphasis: focus.strength, accent: focus.accent };
+  }
+
+  return {
+    opacity: 1 - focus.strength * (1 - focus.dim),
+    emphasis: 0,
+    accent: null,
+  };
 }

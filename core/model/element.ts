@@ -16,6 +16,11 @@ export const CODE_LANGUAGES = [
 export const codeLanguageSchema = z.enum(CODE_LANGUAGES);
 export type CodeLanguage = z.infer<typeof codeLanguageSchema>;
 
+/** What a progressive reveal counts on a code panel. */
+export const CODE_REVEAL_UNITS = ["line", "character"] as const;
+export const codeRevealUnitSchema = z.enum(CODE_REVEAL_UNITS);
+export type CodeRevealUnit = z.infer<typeof codeRevealUnitSchema>;
+
 export const fontRoleSchema = z.enum(["display", "sans", "mono"]);
 export const textAlignSchema = z.enum(["left", "center", "right"]);
 
@@ -85,6 +90,13 @@ export const codeElementSchema = z.object({
     /** 1-based line numbers to emphasise. */
     highlightedLines: z.array(z.number().int().min(1).max(2000)).max(200).default([]),
     showWindowChrome: z.boolean().default(true),
+    /**
+     * What a `reveal` animation counts on this panel. `line` fades whole lines
+     * in; `character` types the code out.
+     */
+    revealUnit: codeRevealUnitSchema.default("line"),
+    /** Draws a typing caret at the head of an unfinished reveal. */
+    showCaret: z.boolean().default(false),
   }),
 });
 
@@ -254,4 +266,8 @@ export function isNode(element: SceneElement): element is NodeElement {
 
 export function isConnector(element: SceneElement): element is ConnectorElement {
   return element.type === "connector";
+}
+
+export function isCode(element: SceneElement): element is CodeElement {
+  return element.type === "code";
 }

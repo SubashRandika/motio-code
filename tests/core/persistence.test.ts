@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ADDABLE_ELEMENT_TYPES,
+  ANIMATION_TYPES,
   canvasConfigSchema,
   createAnimation,
   elementStyleSchema,
@@ -85,25 +86,29 @@ describe("scene data round trip", () => {
     expect(reloaded).toEqual(original);
   });
 
+  // Driven by ANIMATION_TYPES rather than a hand-written list, so a new type
+  // cannot be added to the engine without being covered here.
   it("keeps every animation type intact", () => {
     const element = createElement("text", { canvas, theme, index: 0 });
-    const withAnimations = {
-      ...element,
-      animations: (
-        ["fade", "slide", "scale", "highlight", "emphasis", "reveal", "flow"] as const
-      ).map(createAnimation),
-    };
+    const withAnimations = { ...element, animations: ANIMATION_TYPES.map(createAnimation) };
 
     const parsed = sceneDataSchema.parse({ elements: [withAnimations] });
-    expect(parsed.elements[0].animations.map((a) => a.type)).toEqual([
-      "fade",
-      "slide",
-      "scale",
-      "highlight",
-      "emphasis",
-      "reveal",
-      "flow",
-    ]);
+    expect(parsed.elements[0].animations.map((a) => a.type)).toEqual(ANIMATION_TYPES);
+  });
+
+  it("round-trips the code panel's own reveal settings", () => {
+    const code = createElement("code", { canvas, theme, index: 0 });
+    const typed = {
+      ...code,
+      content: { ...code.content, revealUnit: "character", showCaret: true },
+    };
+
+    const reloaded = sceneDataSchema.parse(JSON.parse(JSON.stringify({ elements: [typed] })));
+    const content = reloaded.elements[0];
+    if (content.type !== "code") throw new Error("expected a code element");
+
+    expect(content.content.revealUnit).toBe("character");
+    expect(content.content.showCaret).toBe(true);
   });
 });
 

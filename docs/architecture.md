@@ -27,6 +27,8 @@ core/model/       Zod schemas + types: project, scene, element, animation, canva
 core/animation/   easing, interpolate, resolve (element -> render state), timeline (scenes -> frame axis)
 core/editing/     geometry (resize, snap, align, marquee) and history (bounded undo stack)
 core/diagram/     connector routing, layered layout, the Mermaid-subset parser, compile
+core/code/        syntax tokens, the cached highlighter, reveal arithmetic
+core/presets/     the named animation presets, written in terms of the model above
 ```
 
 ## The timing model
@@ -275,6 +277,83 @@ Errors are reported per line and block applying; syntax MotioCode does not model
 (`subgraph`, `classDef`, …) warns and is skipped rather than failing the whole
 definition.
 
+## Code panels
+
+### Highlighting never touches the frame path
+
+Tokenising is expensive and has nothing to do with the frame being drawn, so it
+happens once per unique `(code, language, theme)` and is cached. A panel whose
+source has not changed re-renders at the frame rate without going near a
+highlighter, and everything time-dependent — which lines are in, where the caret
+sits, which lines are dimmed — is arithmetic on the render state.
+
+The first time a source appears the panel draws *uncoloured* lines and loads the
+highlighter in the background; one re-render swaps the tokens in. Highlighting
+deliberately never blocks a paint. A dropped frame while scrubbing would be worse
+than a few frames of plain text, and the preview has to keep the timing the
+renderer will.
+
+Three choices inside `core/code/highlight.ts`:
+
+1. **Shiki's fine-grained bundle, not the full one.** Only the eight languages
+   the product supports and the two themes it ships are loaded, through a dynamic
+   import. The editor route's initial JavaScript contains no Shiki at all.
+2. **The JavaScript regex engine, not the WebAssembly one.** No `.wasm` asset
+   means the same code path works in the browser, in the test runner and in a
+   headless renderer with no bundler configuration.
+3. **A bounded cache keyed on the input.** Tokenising is a pure function, so one
+   result serves every frame of the animation and every re-render.
+
+Shiki drops the trailing empty line that `split("\n")` keeps. It is restored,
+because line numbers and the reveal maths are derived from the source and a panel
+that renders one row short of its own line count looks broken.
+
+### Revealing code
+
+`revealCode` turns a 0-1 progress into per-line tokens. Which unit it counts is a
+property of the *panel*, not of the animation, because the engine's rule is that
+the element decides what a "part" is:
+
+- `line` fades each line in whole — the line-by-line reveal. Lines that have not
+  arrived keep their tokens at opacity 0, so the panel never reflows.
+- `character` types the code out, truncating one line mid-flight — the
+  typewriter. A newline counts as a character so a blank line still takes time,
+  which is what stops a gap in the source being skipped instantly.
+
+The caret's blink is derived from the frame number rather than a CSS animation,
+so a seek lands on the same caret state every time.
+
+### Focus, and why the newest one wins
+
+`focus` names a range of parts and a dim level; parts outside the range fade
+towards it. It is the primitive behind highlight-and-explain and the walkthrough.
+
+Several focus animations on one element compose by a rule worth stating: **the
+one whose window started most recently is in force.** Declaration order is
+deliberately not what decides it. Every animation holds its end value after its
+window, so every earlier step of a walkthrough sits at progress 1 forever and
+"last declared wins" would freeze on the final step.
+
+## Presets
+
+A preset is a starting point, not an effect. Each one writes plain animations and
+content settings the user can then open in the properties panel and change.
+Nothing in `core/presets` is a new engine capability — if a preset needed one, the
+model is what should have grown. `focus` is exactly that: three of the six wanted
+it, so it became an animation type rather than six special cases.
+
+Applying a preset **replaces** the element's animations, in one undo step. A
+preset means "make this read like a typewriter", and layering that onto whatever
+was already there would produce something nobody asked for. The panel says so
+before the user clicks.
+
+Two of the six are scene-scoped. A before-and-after comparison and a sequential
+transformation are not one element animating; they are two panels arranged in
+space or in time. Modelling them as element presets would have meant an element
+preset that silently created elements, so the scope is part of a preset's type and
+the store takes a different path for each. Both label their panels through the
+existing window bar rather than adding text elements to be kept in sync.
+
 ## Schema evolution
 
 Stored scenes outlive the code that wrote them. Two rules:
@@ -283,7 +362,9 @@ Stored scenes outlive the code that wrote them. Two rules:
   parses. `tests/core/backward-compatibility.test.ts` pins a real pre-diagram
   scene verbatim and fails if that stops being true.
 - A new element kind is additive to the `sceneElementSchema` union, and nothing
-  else in the engine changes.
+  else in the engine changes. So is a new animation kind: `tests/core/persistence.test.ts`
+  iterates `ANIMATION_TYPES` rather than a hand-written list, so one cannot be
+  added without being covered.
 
 A connector is excluded from `createElement`'s input type rather than left as a
 branch that could only produce an invalid element — it is drawn between two

@@ -23,6 +23,7 @@ const TYPE_LABELS: Record<AnimationType, string> = {
   emphasis: "Emphasis",
   reveal: "Reveal",
   flow: "Flow along route",
+  focus: "Focus lines",
 };
 
 const TRIGGER_OPTIONS = [
@@ -223,6 +224,39 @@ function AnimationFields({
           suffix="f"
           onChange={(staggerInFrames) => patch({ staggerInFrames }, "stagger")}
         />
+      ) : null}
+
+      {animation.type === "focus" ? (
+        <>
+          <Row>
+            <NumberField
+              label="From line"
+              value={animation.fromPart}
+              min={1}
+              max={2000}
+              onChange={(fromPart) => patch({ fromPart }, "fromPart")}
+            />
+            <NumberField
+              label="To line"
+              value={animation.toPart}
+              min={1}
+              max={2000}
+              onChange={(toPart) => patch({ toPart }, "toPart")}
+            />
+          </Row>
+          <NumberField
+            label="Dim the rest to"
+            value={animation.dim}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(dim) => patch({ dim }, "dim")}
+          />
+          <p className="text-[11px] leading-relaxed text-mist-dim">
+            Add several to walk down the code: whichever one has most recently started is the one in
+            force.
+          </p>
+        </>
       ) : null}
 
       {animation.type === "flow" ? (

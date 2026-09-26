@@ -6,6 +6,7 @@ import {
   elementStyleSchema,
   exportConfigSchema,
   themeConfigSchema,
+  type CodeElement,
   type ConnectorElement,
   type NodeElement,
   type Project,
@@ -51,6 +52,40 @@ export function makeTextElement(overrides: Partial<TextElement> = {}): TextEleme
       uppercase: false,
     },
     ...overrides,
+  };
+}
+
+export function makeCodeElement(
+  overrides: Partial<Omit<CodeElement, "content">> & {
+    content?: Partial<CodeElement["content"]>;
+  } = {},
+): CodeElement {
+  return {
+    id: "el_code",
+    name: "Code",
+    type: "code",
+    rect: { x: 40, y: 40, width: 900, height: 500 },
+    layer: 0,
+    from: 0,
+    durationInFrames: null,
+    locked: false,
+    hidden: false,
+    style: { ...elementStyleSchema.parse({}), fill: "#151A22", stroke: "#2A3340", strokeWidth: 1 },
+    animations: [],
+    ...overrides,
+    content: {
+      code: ["const a = 1;", "const b = 2;", "return a + b;"].join("\n"),
+      language: "typescript",
+      title: "example.ts",
+      fontSize: 18,
+      lineHeight: 1.6,
+      showLineNumbers: true,
+      highlightedLines: [],
+      showWindowChrome: true,
+      revealUnit: "line",
+      showCaret: false,
+      ...overrides.content,
+    },
   };
 }
 

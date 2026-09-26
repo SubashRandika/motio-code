@@ -59,6 +59,17 @@ describe("a scene stored before diagrams existed", () => {
     expect(parsed.diagram).toBeNull();
   });
 
+  it("gains the code panel's reveal settings as defaults", () => {
+    // Added with syntax highlighting, after this scene was stored. The defaults
+    // have to describe how the panel already behaved: whole lines, no caret.
+    const parsed = sceneDataSchema.parse(SCENE_BEFORE_DIAGRAMS);
+    const element = parsed.elements[0];
+    if (element.type !== "code") throw new Error("expected a code element");
+
+    expect(element.content.revealUnit).toBe("line");
+    expect(element.content.showCaret).toBe(false);
+  });
+
   it("keeps its element intact through the row mapper", () => {
     const data = rowToSceneData(SCENE_BEFORE_DIAGRAMS);
 
