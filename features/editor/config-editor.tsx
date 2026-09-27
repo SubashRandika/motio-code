@@ -122,7 +122,7 @@ export function ConfigEditor() {
             setDraft(event.target.value);
             setDirty(true);
           }}
-          className="tabular min-h-0 flex-1 resize-none bg-ink-sunk p-3 text-[12px] leading-relaxed text-paper outline-none"
+          className="tabular min-h-0 flex-1 resize-none bg-ink-sunk p-3 text-[12px] leading-relaxed text-paper"
         />
 
         {validation.issues.length > 0 ? (

@@ -5,8 +5,13 @@ import { useId } from "react";
 
 import { cn } from "@/lib/utils/cn";
 
+/**
+ * `border-edge` rather than `border-line`: a field's fill is nearly the same
+ * luminance as the panel behind it, so the border is the only thing that says
+ * "this is a control". See the token comment in globals.css.
+ */
 const CONTROL =
-  "w-full rounded-md border border-line bg-ink-sunk px-3 text-sm text-paper placeholder:text-mist-dim transition-colors duration-150 hover:border-line-strong focus:border-amber focus:outline-none disabled:opacity-50 aria-[invalid=true]:border-danger";
+  "w-full rounded-md border border-edge bg-ink-sunk px-3 text-sm text-paper placeholder:text-mist-dim transition-colors duration-150 hover:border-mist-dim focus:border-amber disabled:opacity-50 aria-[invalid=true]:border-danger";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input className={cn(CONTROL, "h-10", className)} {...props} />;

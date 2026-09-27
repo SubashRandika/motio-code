@@ -41,7 +41,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
             type="search"
             defaultValue={query}
             placeholder="Search projects"
-            className="h-10 w-full rounded-md border border-line bg-ink-sunk pr-3 pl-9 text-sm text-paper placeholder:text-mist-dim hover:border-line-strong focus:border-amber focus:outline-none"
+            className="h-10 w-full rounded-md border border-line bg-ink-sunk pr-3 pl-9 text-sm text-paper placeholder:text-mist-dim hover:border-line-strong focus:border-amber"
           />
         </div>
       </form>

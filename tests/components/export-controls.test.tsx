@@ -97,7 +97,9 @@ describe("exporting a video from the browser", () => {
 
     control.finish();
 
-    await waitFor(() => expect(screen.getByText(/auth-flow-1080p\.mp4/)).toBeInTheDocument());
+    // Twice over: once visibly, once in the live region that announces it.
+    await waitFor(() => expect(screen.getAllByText(/auth-flow-1080p\.mp4/)).toHaveLength(2));
+    expect(screen.getByRole("status")).toHaveTextContent(/Export finished/);
     expect(URL.createObjectURL).toHaveBeenCalled();
     expect(finishRenderAction).toHaveBeenCalledWith({ jobId: "job-1", outcome: "completed" });
   });
@@ -156,13 +158,13 @@ describe("exporting a video from the browser", () => {
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    await waitFor(() => expect(screen.getByText(/Export cancelled/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/Export cancelled/)).not.toHaveLength(0));
     expect(finishRenderAction).toHaveBeenCalledWith({
       jobId: "job-1",
       outcome: "cancelled",
       errorMessage: null,
     });
-    expect(screen.getByText(/Nothing was saved/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/Export cancelled/);
   });
 
   it("shows why a render failed and records the failure", async () => {

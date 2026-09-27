@@ -120,13 +120,22 @@ export function useFrameClock({
     setPlaying(false);
   }, []);
 
+  /**
+   * Toggles what the viewer can actually see, not the raw flag.
+   *
+   * These two disagree exactly when playback is suppressed for reduced motion:
+   * `playing` is still true from `autoPlay` while the composition is held on its
+   * last frame, so the button reads "Play" and a naive toggle would set
+   * `playing` to false -- the Play button would pause an already-paused clock
+   * and appear to do nothing. Reading the effective state is what keeps the
+   * control honest about its own label.
+   */
   const toggle = useCallback(() => {
+    const showingAsPlaying = playing && !suppressed;
     setViewerTookOver(true);
-    setPlaying((current) => {
-      if (!current && frameRef.current >= lastFrame) commit(0);
-      return !current;
-    });
-  }, [commit, lastFrame]);
+    if (!showingAsPlaying && frameRef.current >= lastFrame) commit(0);
+    setPlaying(!showingAsPlaying);
+  }, [commit, lastFrame, playing, suppressed]);
 
   const seek = useCallback(
     (next: number) => {

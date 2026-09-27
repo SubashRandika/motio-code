@@ -15,8 +15,23 @@
   --color-raised: #1e2530;
   --color-line: #2a3340;
   --color-line-strong: #3a4656;
-  --color-mist: #8a97a8;
-  --color-mist-dim: #5d6a7b;
+  /* The boundary of a form control, which is the one border a low-vision user
+     needs to see: a text field here is `bg-ink-sunk` on `bg-panel`, and those
+     two differ by 1.12:1, so the fill does not identify the control and the
+     border has to. WCAG 1.4.11 asks 3:1 for that; `line` manages 1.37:1.
+     Dividers and panel edges keep `line` -- they are decorative, and raising
+     every border to 3:1 would make the whole interface shout. */
+  --color-edge: #5c708d;
+
+  /* Three text weights, measured rather than eyeballed. The worst case for each
+     is the lightest surface it appears on (`raised`), and the ratio there is:
+       mist-dim 4.67:1   mist 6.82:1   paper 13.0:1
+     `mist-dim` used to be #5d6a7b, which read 2.80:1 on raised and failed AA on
+     every surface while carrying real information -- frame counts, durations,
+     element counts, placeholders. `mist` moved up with it so the ramp still has
+     three visible steps instead of two tones a shade apart. */
+  --color-mist: #9faec1;
+  --color-mist-dim: #7e8fa6;
   --color-paper: #e8ecf2;
 
   --color-amber: #f2a63b;

@@ -36,6 +36,20 @@ export function ExportControls({ project }: { project: Project }) {
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-line bg-raised px-3 py-3">
+      {/* A render takes minutes and its only other signal is a moving bar, which
+          announces nothing. Milestones only: a percentage read aloud several
+          times a second would make the tab unusable. The failure case is left to
+          the `role="alert"` at the bottom. */}
+      <p role="status" className="sr-only">
+        {render.phase === "rendering"
+          ? "Rendering started. This tab must stay open."
+          : render.phase === "done"
+            ? `Export finished. ${render.fileName ?? "The video"} was saved to your downloads.`
+            : render.phase === "cancelled"
+              ? "Export cancelled. Nothing was saved."
+              : ""}
+      </p>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[13px] font-medium text-paper">

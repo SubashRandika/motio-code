@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
       </Panel>
 
       <p className="text-center text-[13px] text-mist">
-        <Link href="/login" className="text-amber hover:underline">
+        <Link href="/login" className="text-amber underline decoration-amber/40 underline-offset-2 hover:decoration-amber">
           Back to sign in
         </Link>
       </p>

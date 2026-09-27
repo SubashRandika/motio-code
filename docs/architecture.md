@@ -736,3 +736,122 @@ the `.tabular` class so digits never shift as the playhead moves.
 
 Composition themes (`core/model/theme.ts`) are separate from the application's
 own chrome, so a user can build a light-themed video inside a dark editor.
+
+## Accessibility
+
+The starting point was better than a typical first pass — a skip link, one focus
+treatment, reduced motion honoured in the clock — and that made the remaining
+problems the interesting kind: things that looked finished and were not.
+
+### Contrast is asserted from the stylesheet, not from a screenshot
+
+`--color-mist-dim` was `#5d6a7b`, which is **2.80:1** on `raised` and fails AA on
+every surface in the app. It was not decorative: frame counts, scene durations,
+element counts, placeholders and the export's own progress line all used it, at
+10.5–12px. It now reads 4.67:1 at worst, and `--color-mist` moved up with it so
+the ramp still has three distinguishable steps rather than two near-identical
+greys.
+
+`tests/core/contrast.test.ts` parses the tokens out of `globals.css` and checks
+every one against every surface it is painted on. Parsing rather than duplicating
+matters: a copied palette in a test passes forever while the real one regresses.
+The test also asserts the *ramp* holds, because making `mist-dim` legible is
+worthless if it ends up indistinguishable from `mist`.
+
+A separate finding produced `--color-edge`. A text field is `bg-ink-sunk` on
+`bg-panel`, and those differ by **1.12:1** — so the fill does not identify the
+control and the border has to, which WCAG 1.4.11 puts at 3:1. `--color-line`
+managed 1.37:1. Dividers and panel edges still use `line`, because they are
+decorative and raising every border to 3:1 would make the whole interface shout.
+
+### One focus treatment, actually applied
+
+`globals.css` says "one focus treatment everywhere, always visible on keyboard",
+and six places quietly overrode it with `focus:outline-none` — including both
+full-panel code textareas, which suppressed it unconditionally. Tailwind's
+utilities layer beats the base layer, so every text input in the app had **no
+focus ring at all**; the only cue was a border colour change.
+
+This is the clearest argument for testing accessibility in a browser. Nothing in
+a type check, a component test or a screenshot notices a missing outline, and the
+author — using a mouse — never sees the consequence.
+
+### Global shortcuts must not eat a control's own keys
+
+The editor binds shortcuts to `window`, which is the only way a canvas shortcut
+can work when nothing in particular is focused. The cost is that the handler also
+hears keys meant for whatever *is* focused, and `preventDefault()` there does not
+duplicate the control's behaviour — it cancels it.
+
+"Space toggles playback" therefore made **every icon button in the editor toolbar
+unpressable by keyboard**, while working perfectly with a mouse. `lib/a11y/
+key-ownership.ts` asks whether the focused element already means something by
+this key, and the shortcut yields if so. It is deliberately generous: a shortcut
+that fails to fire is a small annoyance, whereas one that eats a control's key
+makes the control unusable without a pointer.
+
+Escape now also yields to an open dialog, so closing the preview no longer throws
+away the canvas selection on the way out.
+
+### A role is a promise
+
+`role="menu"` tells a screen reader the arrow keys will work. The project menu's
+did not — no arrow navigation, no focus on open, and focus dropped to `<body>` on
+close, landing a keyboard user at the top of the dashboard with no idea which
+project they had been on. Announcing a widget and then not implementing it is
+worse than using plain buttons.
+
+The timeline had the same shape of problem from the other direction.
+`role="slider"` is a leaf role, and the track carried the scene buttons inside
+it, so a screen reader announced a slider and then found buttons in it. The role
+moved to the playhead — where a native range input keeps it, on the thumb rather
+than the groove — and a test now asserts the slider has no focusable children
+*and* that the scene buttons are still reachable, so the rule cannot be satisfied
+by making something inert.
+
+### The canvas is pointer-only, and that is the honest answer
+
+Dragging a box is not a gesture a keyboard has, and pretending otherwise would
+produce a worse editor than admitting it. What matters is that nothing is *only*
+reachable by pointer: selection is in the Layers list, position and size are
+number fields in the properties panel, timing is on the clip and in those fields.
+The canvas is a named region that announces what is selected, because the
+selection outline is drawn in pixels and says nothing otherwise.
+
+### Announcements are for events, not states
+
+⌘S was silent. It now announces the settled result only — not "Saving", which is
+immediately superseded by its own outcome, and not "Unsaved changes", which is an
+ambient state that would interrupt on every keystroke. A failure keeps its
+assertive `role="alert"`, because losing work is worth interrupting for. A render
+announces its start and its end, never its percentage.
+
+### axe and hand-written specs answer different questions
+
+`e2e/accessibility.spec.ts` runs both. The axe sweep is good at breadth and knows
+nothing about intent; the written specs check what is specific to this product —
+whether the skip link goes anywhere, whether sign-in can be completed without a
+pointer, whether a focused control is visibly focused.
+
+Both were worth having. axe found a link distinguished only by colour and a code
+panel that scrolls but could not be scrolled by keyboard. The hand-written focus
+test found the suppressed outlines. And the reduced-motion spec found a genuine
+product bug: because an autoplaying clock is held on its last frame for a viewer
+who asked for less motion, `playing` was still true while the screen showed a
+paused composition — so the button labelled **Play did nothing**. The clock now
+toggles the state the viewer can see rather than the raw flag, and
+`tests/components/frame-clock.test.tsx` covers it, which nothing did before.
+
+The landing page hero is excluded from the contrast rule alone, and only there.
+It is a mock video that fades its panel in at the start of every loop, so axe
+samples whatever opacity it catches — true of any frame of any video mid-fade,
+and not what 1.4.3 is about. The exclusion is kept earned: one test asserts the
+`<figcaption>` text alternative exists, another scans the hero for every *other*
+rule, and the tokens inside it are still measured statically.
+
+### What this does not claim
+
+Passing every rule here is not the same as being pleasant to use with a screen
+reader, and no score should be read that way. The editor's authenticated surfaces
+are not in the axe sweep yet, because the sweep runs signed-out; extending it is
+a matter of pointing it at the authenticated project once a test account exists.

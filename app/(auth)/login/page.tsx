@@ -45,7 +45,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
       <p className="text-center text-[13px] text-mist">
         New to MotioCode?{" "}
-        <Link href="/signup" className="text-amber hover:underline">
+        <Link href="/signup" className="text-amber underline decoration-amber/40 underline-offset-2 hover:decoration-amber">
           Create an account
         </Link>
       </p>

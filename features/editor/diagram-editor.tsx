@@ -147,7 +147,7 @@ export function DiagramEditor() {
           aria-invalid={errors.length > 0}
           placeholder={"flowchart LR\n  A[Client] --> B[API]\n  B --> C[(Database)]"}
           onChange={(event) => update(event.target.value)}
-          className="tabular min-h-0 flex-1 resize-none bg-ink-sunk p-3 text-[12px] leading-relaxed text-paper outline-none placeholder:text-mist-dim"
+          className="tabular min-h-0 flex-1 resize-none bg-ink-sunk p-3 text-[12px] leading-relaxed text-paper placeholder:text-mist-dim"
         />
 
         {issues.length > 0 ? (

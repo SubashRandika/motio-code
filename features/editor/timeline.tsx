@@ -74,36 +74,24 @@ export function TimelinePanel({ timeline, clock }: { timeline: Timeline; clock: 
 
       {/* ---------------------------------------------------- scene strip */}
       <div className="px-3 pt-3">
+        {/*
+          The track is the pointer surface, not the slider. `role="slider"` is a
+          leaf role: it must not contain focusable children, and this track is
+          full of scene buttons -- a screen reader would announce a slider and
+          then find buttons inside it, which describes no widget that exists.
+
+          So the role lives on the playhead below, the way a native range input
+          puts it on the thumb. The scene buttons stay ordinary buttons, and the
+          keyboard path to scrubbing is the playhead itself.
+        */}
         <div
           ref={trackRef}
-          role="slider"
-          tabIndex={0}
-          aria-label="Playhead"
-          aria-valuemin={0}
-          aria-valuemax={Math.max(0, durationInFrames - 1)}
-          aria-valuenow={clock.frame}
-          aria-valuetext={`Frame ${clock.frame}`}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);
             seekFromPointer(event.clientX);
           }}
           onPointerMove={(event) => {
             if (event.buttons === 1) seekFromPointer(event.clientX);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowLeft") {
-              event.preventDefault();
-              clock.step(event.shiftKey ? -10 : -1);
-            } else if (event.key === "ArrowRight") {
-              event.preventDefault();
-              clock.step(event.shiftKey ? 10 : 1);
-            } else if (event.key === "Home") {
-              event.preventDefault();
-              clock.seek(0);
-            } else if (event.key === "End") {
-              event.preventDefault();
-              clock.seek(durationInFrames - 1);
-            }
           }}
           className="relative h-9 cursor-col-resize touch-none rounded-sm bg-ink-sunk"
         >
@@ -136,12 +124,39 @@ export function TimelinePanel({ timeline, clock }: { timeline: Timeline; clock: 
             );
           })}
 
+          {/* `pointer-events-none` so it never swallows a click meant for the
+              track underneath, which is how scrubbing works. Keyboard focus is
+              unaffected by that. */}
           <div
-            aria-hidden="true"
+            role="slider"
+            tabIndex={0}
+            aria-label="Playhead"
+            aria-valuemin={0}
+            aria-valuemax={Math.max(0, durationInFrames - 1)}
+            aria-valuenow={clock.frame}
+            aria-valuetext={`Frame ${clock.frame}`}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft") {
+                event.preventDefault();
+                clock.step(event.shiftKey ? -10 : -1);
+              } else if (event.key === "ArrowRight") {
+                event.preventDefault();
+                clock.step(event.shiftKey ? 10 : 1);
+              } else if (event.key === "Home") {
+                event.preventDefault();
+                clock.seek(0);
+              } else if (event.key === "End") {
+                event.preventDefault();
+                clock.seek(durationInFrames - 1);
+              }
+            }}
             className="pointer-events-none absolute inset-y-0 z-10 w-px bg-cyan"
             style={{ left: `${percent}%` }}
           >
-            <span className="absolute -top-1 -left-[3.5px] size-2 rotate-45 rounded-[1px] bg-cyan" />
+            <span
+              aria-hidden="true"
+              className="absolute -top-1 -left-[3.5px] size-2 rotate-45 rounded-[1px] bg-cyan"
+            />
           </div>
         </div>
 

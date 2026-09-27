@@ -85,6 +85,22 @@ describe("TimelinePanel transport", () => {
     expect(slider).toHaveAttribute("aria-valuetext", "Frame 60");
   });
 
+  it("keeps the slider a leaf, so it is a widget a screen reader can describe", () => {
+    // `role="slider"` must not contain focusable children. The scene blocks are
+    // real buttons on the track, so the role belongs on the playhead -- the way
+    // a native range input puts it on the thumb, not the groove.
+    renderTimeline(makeClock(), 60);
+
+    const slider = screen.getByRole("slider", { name: "Playhead" });
+    expect(
+      slider.querySelectorAll('button, a[href], input, select, textarea, [tabindex]'),
+    ).toHaveLength(0);
+
+    // And the scene buttons are still reachable, rather than having been made
+    // inert to satisfy the rule.
+    expect(screen.getByRole("button", { name: "The check" })).toBeInTheDocument();
+  });
+
   it("scrubs with the arrow keys, ten frames at a time with shift", async () => {
     const user = userEvent.setup();
     const clock = makeClock();

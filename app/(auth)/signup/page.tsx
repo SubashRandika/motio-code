@@ -26,7 +26,7 @@ export default function SignUpPage() {
 
       <p className="text-center text-[13px] text-mist">
         Already have an account?{" "}
-        <Link href="/login" className="text-amber hover:underline">
+        <Link href="/login" className="text-amber underline decoration-amber/40 underline-offset-2 hover:decoration-amber">
           Sign in
         </Link>
       </p>

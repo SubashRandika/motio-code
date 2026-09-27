@@ -322,7 +322,7 @@ function AddAnimationMenu({ onAdd }: { onAdd: (type: AnimationType) => void }) {
           if (event.target.value) onAdd(event.target.value as AnimationType);
           event.target.value = "";
         }}
-        className="h-7 rounded border border-line bg-raised pr-6 pl-2 text-[11.5px] text-mist transition-colors hover:border-line-strong hover:text-paper focus:border-amber focus:outline-none"
+        className="h-7 rounded border border-line bg-raised pr-6 pl-2 text-[11.5px] text-mist transition-colors hover:border-line-strong hover:text-paper focus:border-amber"
       >
         <option value="">Add…</option>
         {ANIMATION_TYPES.map((type) => (

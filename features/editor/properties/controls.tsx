@@ -156,7 +156,7 @@ export function ColorField({
           type="color"
           value={(value ?? "#000000").slice(0, 7)}
           onChange={(event) => onChange(event.target.value)}
-          className="h-9 w-10 shrink-0 cursor-pointer rounded border border-line bg-ink-sunk"
+          className="h-9 w-10 shrink-0 cursor-pointer rounded border border-edge bg-ink-sunk"
         />
         <span className="tabular flex-1 truncate text-[11.5px] text-mist-dim">
           {value ?? "none"}

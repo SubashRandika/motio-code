@@ -61,12 +61,37 @@ export function CanvasStage({ timeline, frame }: { timeline: Timeline; frame: nu
   }, [project.canvas.width, project.canvas.height]);
 
   const selectionBoxes = selectionBoxesFor(elements, selectedElementIds);
+  const selectedNames = elements
+    .filter((element) => selectedElementIds.includes(element.id))
+    .map((element) => element.name);
 
   return (
-    <div
+    <section
       ref={containerRef}
+      aria-label="Canvas"
       className="canvas-grid relative flex flex-1 items-center justify-center overflow-hidden bg-ink-sunk"
     >
+      {/*
+        Direct manipulation on the stage -- drag, marquee, resize handles,
+        connect nubs -- is pointer-only, and the honest position is that it will
+        stay that way: dragging a box is not a gesture a keyboard has.
+
+        What matters is that nothing is *only* reachable that way. Selection is
+        in the Layers list, position and size are number fields in the properties
+        panel, timing is on the timeline clip and in those fields too. So the
+        keyboard route to every property exists; it is just not this surface.
+
+        This region is named so it can be found and skipped, and announces what
+        is selected, because the selection outline is drawn in pixels and says
+        nothing otherwise.
+      */}
+      <p role="status" className="sr-only">
+        {selectedNames.length === 0
+          ? "Nothing selected."
+          : selectedNames.length === 1
+            ? `${selectedNames[0]} selected.`
+            : `${selectedNames.length} elements selected: ${selectedNames.join(", ")}.`}
+      </p>
       <div
         ref={stageRef}
         data-canvas-stage
@@ -117,7 +142,7 @@ export function CanvasStage({ timeline, frame }: { timeline: Timeline; frame: nu
           Add an element from the left panel to start this scene.
         </p>
       ) : null}
-    </div>
+    </section>
   );
 }
 

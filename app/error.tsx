@@ -15,8 +15,10 @@ export default function GlobalError({
     console.error(error);
   }, [error]);
 
+  // The landmark is `id="main"` because the skip link in the root layout targets
+  // it; an error page without one makes "Skip to content" do nothing at all.
   return (
-    <div className="flex min-h-full flex-1 items-center justify-center px-4 py-16">
+    <main id="main" className="flex min-h-full flex-1 items-center justify-center px-4 py-16">
       <div className="max-w-md text-center">
         <p className="tabular text-[11px] tracking-[0.18em] text-danger uppercase">Error</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">Something broke on our side</h1>
@@ -30,6 +32,6 @@ export default function GlobalError({
           <Button onClick={reset}>Try again</Button>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

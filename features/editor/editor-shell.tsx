@@ -23,6 +23,7 @@ import { buildTimeline } from "@/core/animation";
 import { canRedo, canUndo, redoLabel, undoLabel } from "@/core/editing";
 import { touchProjectAction } from "@/features/projects/actions";
 import { useFrameClock } from "@/features/preview/use-frame-clock";
+import { controlOwnsKey, modalIsOpen } from "@/lib/a11y/key-ownership";
 import { cn } from "@/lib/utils/cn";
 
 import { CanvasStage } from "./canvas-stage";
@@ -73,13 +74,6 @@ export function EditorShell() {
       // owns the arrows while it has focus.
       if (event.defaultPrevented) return;
 
-      const target = event.target as HTMLElement | null;
-      const typing =
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.tagName === "SELECT" ||
-        target?.isContentEditable === true;
-
       const meta = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       const state = store.getState();
@@ -103,7 +97,11 @@ export function EditorShell() {
         return;
       }
 
-      if (typing) return;
+      // Past this point the shortcuts are bare keys, which is where they can
+      // collide with the focused control's own keyboard behaviour. Space is the
+      // one that bites: it activates a button, so preventing its default would
+      // make every icon button in this toolbar unusable without a mouse.
+      if (controlOwnsKey(event.target, event.key)) return;
 
       if (meta && key === "a") {
         event.preventDefault();
@@ -125,6 +123,9 @@ export function EditorShell() {
       }
 
       if (event.key === "Escape") {
+        // A dialog is closing on this same Escape; deselecting as well would
+        // silently throw away the selection the user came back to.
+        if (modalIsOpen()) return;
         state.selectElement(null);
         return;
       }
@@ -175,7 +176,7 @@ export function EditorShell() {
           value={project.name}
           maxLength={120}
           onChange={(event) => renameProject(event.target.value)}
-          className="w-56 rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] font-medium text-paper transition-colors hover:border-line focus:border-amber focus:outline-none"
+          className="w-56 rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] font-medium text-paper transition-colors hover:border-line focus:border-amber"
         />
 
         <HistoryButtons />
@@ -312,41 +313,53 @@ function HistoryButtons() {
   );
 }
 
+/**
+ * Saving is otherwise a purely visual event, and ⌘S gives no other feedback --
+ * so a screen-reader user pressing it has no way to know it worked.
+ *
+ * Only the settled result is announced. "Unsaved changes" is an ambient state
+ * rather than an event, and announcing it would interrupt on every keystroke;
+ * "Saving" is immediately superseded by its own outcome. A failure is announced
+ * by the visible `role="alert"` below, which is assertive because losing work is
+ * worth interrupting for.
+ */
 function SaveStatus({ status }: { status: ReturnType<typeof useAutosave>["status"] }) {
   const saveError = useEditorStore((state) => state.saveError);
 
-  if (status === "saving") {
-    return (
-      <span className="flex items-center gap-1.5 text-[12px] text-mist">
-        <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-        Saving
-      </span>
-    );
-  }
+  return (
+    <>
+      {/* Mounted at all times: a live region only announces changes to a node
+          that was already in the accessibility tree when they happened. */}
+      <p role="status" className="sr-only">
+        {status === "saved" ? "Project saved." : ""}
+      </p>
 
-  if (status === "error") {
-    return (
-      <span role="alert" className="flex items-center gap-1.5 text-[12px] text-danger">
-        <CloudOff className="size-3" aria-hidden="true" />
-        {saveError ?? "Could not save"}
-      </span>
-    );
-  }
+      {status === "saving" ? (
+        <span className="flex items-center gap-1.5 text-[12px] text-mist">
+          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+          Saving
+        </span>
+      ) : null}
 
-  if (status === "dirty") {
-    return <span className="text-[12px] text-mist-dim">Unsaved changes</span>;
-  }
+      {status === "error" ? (
+        <span role="alert" className="flex items-center gap-1.5 text-[12px] text-danger">
+          <CloudOff className="size-3" aria-hidden="true" />
+          {saveError ?? "Could not save"}
+        </span>
+      ) : null}
 
-  if (status === "saved") {
-    return (
-      <span className="flex items-center gap-1.5 text-[12px] text-mist">
-        <Check className="size-3 text-ok" aria-hidden="true" />
-        Saved
-      </span>
-    );
-  }
+      {status === "dirty" ? (
+        <span className="text-[12px] text-mist-dim">Unsaved changes</span>
+      ) : null}
 
-  return null;
+      {status === "saved" ? (
+        <span className="flex items-center gap-1.5 text-[12px] text-mist">
+          <Check className="size-3 text-ok" aria-hidden="true" />
+          Saved
+        </span>
+      ) : null}
+    </>
+  );
 }
 
 function ToolbarToggle({

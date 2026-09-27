@@ -60,7 +60,7 @@ export function HeroComposition() {
   const playheadPercent = (frame / (DURATION - 1)) * 100;
 
   return (
-    <figure className="m-0 flex flex-col gap-3">
+    <figure data-hero-composition className="m-0 flex flex-col gap-3">
       <div
         className="relative overflow-hidden rounded-panel border border-line bg-panel"
         style={{ opacity: panelOpacity, transform: `translateY(${panelLift}px)` }}
@@ -72,7 +72,18 @@ export function HeroComposition() {
           <span className="tabular ml-2 text-[11px] text-mist-dim">auth/handler.ts</span>
         </div>
 
-        <pre className="tabular overflow-x-auto px-4 py-4 text-[12.5px] leading-[1.75] sm:text-[13.5px]">
+        {/*
+          Focusable because it scrolls. At narrow widths the longest line runs
+          past the panel, and a region that can only be scrolled by dragging is
+          a region a keyboard user cannot finish reading. `tabIndex` makes the
+          arrow keys work on it; the label is what they hear when they land.
+        */}
+        <pre
+          tabIndex={0}
+          role="region"
+          aria-label="Example source code"
+          className="tabular overflow-x-auto px-4 py-4 text-[12.5px] leading-[1.75] sm:text-[13.5px]"
+        >
           <code>
             {CODE.map((line, index) => {
               const progress = Math.min(1, Math.max(0, linesShown - index));
