@@ -9,6 +9,8 @@ export interface SessionUser {
   email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  /** Whether to fall back to Gravatar when no avatar has been uploaded. */
+  useGravatar: boolean;
 }
 
 /**
@@ -26,7 +28,7 @@ export async function getOptionalUser(): Promise<SessionUser | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, avatar_url")
+    .select("display_name, avatar_url, use_gravatar")
     .eq("id", claims.sub)
     .maybeSingle();
 
@@ -35,6 +37,10 @@ export async function getOptionalUser(): Promise<SessionUser | null> {
     email: typeof claims.email === "string" ? claims.email : null,
     displayName: profile?.display_name ?? null,
     avatarUrl: profile?.avatar_url ?? null,
+    // Defaults to true for a profile row that has not loaded, matching the
+    // column default -- the header should not silently change behaviour on a
+    // transient read failure.
+    useGravatar: profile?.use_gravatar ?? true,
   };
 }
 

@@ -1,9 +1,11 @@
 import Link from "next/link";
 
 import { LogoLink } from "@/components/brand/logo";
+import { Avatar } from "@/components/ui/avatar";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { signOutAction } from "@/features/auth/actions";
 import type { SessionUser } from "@/features/auth/session";
+import { avatarInitial, avatarSourceFor } from "@/lib/avatar";
 
 const NAV = [
   { href: "/dashboard", label: "Projects" },
@@ -11,7 +13,7 @@ const NAV = [
 ] as const;
 
 export function AppHeader({ user }: { user: SessionUser }) {
-  const initial = (user.displayName ?? user.email ?? "?").trim().charAt(0).toUpperCase();
+  const initial = avatarInitial(user.displayName, user.email);
 
   return (
     <header className="border-b border-line bg-ink">
@@ -35,12 +37,11 @@ export function AppHeader({ user }: { user: SessionUser }) {
             New project
           </ButtonLink>
 
-          <span
-            aria-hidden="true"
-            className="grid size-8 place-items-center rounded-full border border-line bg-raised text-[12px] font-medium text-mist"
-          >
-            {initial}
-          </span>
+          <Avatar
+            src={avatarSourceFor(user)}
+            initial={initial}
+            label={`Signed in as ${user.displayName ?? user.email ?? "your account"}`}
+          />
 
           <form action={signOutAction}>
             <Button type="submit" variant="ghost" size="sm">

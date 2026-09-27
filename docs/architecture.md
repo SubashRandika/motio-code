@@ -855,3 +855,83 @@ Passing every rule here is not the same as being pleasant to use with a screen
 reader, and no score should be read that way. The editor's authenticated surfaces
 are not in the axe sweep yet, because the sweep runs signed-out; extending it is
 a matter of pointing it at the authenticated project once a test account exists.
+
+## Avatars
+
+The header shows, in order of preference: a picture the user uploaded, then
+their Gravatar if they allow it, then their initial.
+
+### The order is the design
+
+An upload beats Gravatar because one is a choice and the other is an inference
+from an email address. Turning Gravatar off does not cost someone the picture
+they deliberately uploaded — the two settings are independent, and the tests say
+so, because collapsing them is the obvious refactor a year from now.
+
+### Gravatar is an inference, so it is declinable
+
+`profiles.use_gravatar` defaults to true, which keeps existing behaviour, but it
+exists so that behaviour is a choice. When it is off **no request is made at
+all** — not a request whose result is hidden, which would still carry the user's
+hash to a third party.
+
+Two things keep the default defensible. The address is never sent: Gravatar keys
+on a SHA-256 of it. And the lookup is proxied through our own origin by
+`next/image`, so Automattic sees our server rather than every signed-in user's IP
+address on every page view. The setting's description in the profile form says
+both of those in plain language, because someone deciding whether to allow it
+needs to know who is being asked and what is being sent.
+
+### The avatars bucket is public, and it is the only one
+
+Every other bucket in `0002` is private. This one is not, for a reason worth
+writing down: a private object is read through a signed URL, a signed URL is
+different every time it is generated, and `next/image` caches on the URL. A
+fresh signature per render means a cache key per render — the optimizer would
+re-fetch and re-encode the same picture forever, plus a Storage round-trip on
+every authenticated page load.
+
+What is traded away is small. An avatar at an unguessable path is readable by
+anyone holding the URL, which is the same exposure every other product's profile
+picture has, and it is not the class of data that projects and renders are.
+
+**SVG is excluded from the allowed types.** An SVG is a document that can carry
+script, and a public bucket serving user-supplied SVG is a stored XSS primitive.
+PNG, JPEG and WebP cannot execute.
+
+### The path crosses a trust boundary; the URL never does
+
+The browser uploads straight to Storage rather than through a server action,
+because a server action's body is capped at 1MB and an avatar may be 2MB —
+routing it through the server would mean raising that cap for every action in
+the app in order to carry image bytes twice.
+
+The consequence is that the path arrives from the client. Two rules make that
+safe, and both are tested:
+
+1. **The path must be inside the caller's own folder.** RLS on
+   `storage.objects` already prevents *writing* elsewhere; what is left to stop
+   is a user *claiming* an object someone else wrote. The check is a full shape
+   match rather than a `startsWith`, because `{uid}-evil/x.png` starts with the
+   id and is a different folder.
+2. **The URL is built server-side from the path, never accepted.** Accepting a
+   URL would let anyone point their avatar at any address on the internet, which
+   turns the header into a way to make every viewer's browser call a chosen
+   server.
+
+The limits in the upload form are a courtesy, not a control. Storage enforces
+the size and the type list itself; the browser checks exist so the user gets a
+sentence instead of an opaque rejection after a slow upload.
+
+### Verified against the real policies
+
+The RLS was proved by acting as an authenticated user inside a transaction that
+rolled back: writing into your own folder is allowed, writing into another
+user's folder is blocked, writing to the bucket root is blocked, and deleting
+another user's avatar touches nothing.
+
+### What is deliberately missing
+
+Cropping, resizing and format conversion. A 2MB limit and `next/image` doing the
+downscaling is enough for a 32px circle, and an in-browser cropper is a feature
+in its own right rather than part of this one.
