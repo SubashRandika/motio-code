@@ -4,16 +4,37 @@ import { createServerClient } from "@supabase/ssr";
 import { publicEnv } from "@/lib/env";
 import type { Database } from "@/lib/supabase/database.types";
 
-/** Routes that never require a session. */
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth"];
+/**
+ * Everything under these prefixes requires a session.
+ *
+ * Named as what is protected rather than what is public, which is the less
+ * obvious of the two and was originally the other way round. Listing the public
+ * routes means every path that matches *no route at all* is treated as
+ * protected -- so a signed-out visitor following a stale link was sent to the
+ * login form, and after signing in was delivered to the 404 page they were
+ * always going to get. The not-found page was unreachable for exactly the
+ * people most likely to need it.
+ *
+ * The usual objection to an allowlist of protected routes is that forgetting to
+ * add one makes it public. That is not the failure mode here: every page in the
+ * signed-in group renders under a layout that calls `requireUser()`, so the
+ * server redirects regardless of what this list says. This gate exists to avoid
+ * rendering a page that is about to be thrown away, not to be the only lock --
+ * and `e2e/auth-gate.spec.ts` walks every protected route from a browser.
+ */
+const PROTECTED_PATHS = ["/dashboard", "/projects", "/settings"];
 
 /** Routes a signed-in user should not see. */
 const GUEST_ONLY_PATHS = ["/login", "/signup", "/forgot-password"];
 
-function isWithin(pathname: string, paths: string[]) {
+export function isWithin(pathname: string, paths: string[]) {
   return paths.some((path) =>
     path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(`${path}/`),
   );
+}
+
+export function requiresSession(pathname: string): boolean {
+  return isWithin(pathname, PROTECTED_PATHS);
 }
 
 /**
@@ -53,7 +74,7 @@ export async function updateSession(request: NextRequest) {
   const claims = data?.claims;
   const { pathname } = request.nextUrl;
 
-  if (!claims && !isWithin(pathname, PUBLIC_PATHS)) {
+  if (!claims && requiresSession(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname)}`;

@@ -3,6 +3,7 @@
 import { Player } from "@remotion/player";
 import { useMemo, useState } from "react";
 
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Modal } from "@/components/ui/modal";
 import {
   EXPORT_RESOLUTIONS,
@@ -60,18 +61,44 @@ export function ExportPreview({ project, onClose }: { project: Project; onClose:
           className="overflow-hidden rounded-md border border-line bg-ink-sunk"
           style={{ aspectRatio: `${previewPlan.width} / ${previewPlan.height}` }}
         >
-          <Player
-            component={MotioComposition}
-            inputProps={{ project, plan: previewPlan }}
-            durationInFrames={previewPlan.durationInFrames}
-            fps={previewPlan.fps}
-            compositionWidth={previewPlan.width}
-            compositionHeight={previewPlan.height}
-            controls
-            loop
-            doubleClickToFullscreen
-            style={{ width: "100%", height: "100%" }}
-          />
+          {/*
+            The Player is third-party code rendering user content, which is two
+            reasons for it not to be able to take the editor with it. Bounded
+            here rather than around the whole modal so the export controls below
+            stay usable: a preview that cannot play does not mean a render that
+            cannot run, and someone who knows their project is fine should still
+            be able to export it.
+
+            The quality toggle is a reset key, so switching draft/full is also
+            the way to retry a Player that failed once.
+          */}
+          <ErrorBoundary
+            resetKeys={[quality, project]}
+            fallback={() => (
+              <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+                <p className="text-[13px] font-medium text-paper">
+                  The preview could not be played
+                </p>
+                <p className="max-w-sm text-[12px] leading-relaxed text-mist">
+                  Switching the preview quality below will try again. Exporting does not use the
+                  player, so it may still work.
+                </p>
+              </div>
+            )}
+          >
+            <Player
+              component={MotioComposition}
+              inputProps={{ project, plan: previewPlan }}
+              durationInFrames={previewPlan.durationInFrames}
+              fps={previewPlan.fps}
+              compositionWidth={previewPlan.width}
+              compositionHeight={previewPlan.height}
+              controls
+              loop
+              doubleClickToFullscreen
+              style={{ width: "100%", height: "100%" }}
+            />
+          </ErrorBoundary>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">

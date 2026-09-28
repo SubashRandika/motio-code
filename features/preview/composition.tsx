@@ -8,6 +8,8 @@ import {
   type SceneElement,
 } from "@/core/model";
 
+import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { BrokenElement } from "@/features/editor/broken-element";
 import { ConnectorLayer } from "@/features/editor/connector-layer";
 import { ElementView } from "@/features/editor/element-view";
 
@@ -29,11 +31,23 @@ export function ProjectComposition({
   project,
   frame,
   timeline,
+  isolateElements = false,
 }: {
   project: Project;
   frame: number;
   /** Pass a memoised timeline to avoid rebuilding it on every frame. */
   timeline?: Timeline;
+  /**
+   * Contain a throwing element to its own box instead of letting it take the
+   * composition down. The editor turns this on; a render deliberately does not.
+   *
+   * The two want opposite things from the same failure. In the editor, losing
+   * the canvas means losing the way to repair the element that broke it, so one
+   * bad box should become one bad box. In a render, a contained failure would
+   * silently bake a placeholder into a video someone is about to publish -- so
+   * there it should fail, loudly, where the export can report it.
+   */
+  isolateElements?: boolean;
 }) {
   const resolved = timeline ?? buildTimeline(project.scenes);
   const active = getActiveSegments(resolved, frame);
@@ -64,6 +78,7 @@ export function ProjectComposition({
               frame={localFrame}
               sceneDurationInFrames={scene.durationInFrames}
               project={project}
+              isolateElements={isolateElements}
             />
           </div>
         );
@@ -139,23 +154,43 @@ export function SceneLayer({
   frame,
   sceneDurationInFrames,
   project,
+  isolateElements = false,
 }: {
   elements: SceneElement[];
   frame: number;
   sceneDurationInFrames: number;
   project: Project;
+  isolateElements?: boolean;
 }) {
   const order = paintOrder(elements);
 
-  const paint = (element: SceneElement) => (
-    <ElementView
-      key={element.id}
-      element={element}
-      frame={frame}
-      sceneDurationInFrames={sceneDurationInFrames}
-      theme={project.theme}
-    />
-  );
+  const paint = (element: SceneElement) => {
+    const view = (
+      <ElementView
+        key={element.id}
+        element={element}
+        frame={frame}
+        sceneDurationInFrames={sceneDurationInFrames}
+        theme={project.theme}
+      />
+    );
+
+    if (!isolateElements) return view;
+
+    return (
+      <ErrorBoundary
+        key={element.id}
+        // The element object itself: the store replaces it on every edit, so
+        // changing anything about a broken element makes the boundary try
+        // again. Without that, fixing the element would leave the fallback in
+        // place and the fix would look like it had not worked.
+        resetKeys={[element]}
+        fallback={() => <BrokenElement element={element} />}
+      >
+        {view}
+      </ErrorBoundary>
+    );
+  };
 
   return (
     <>

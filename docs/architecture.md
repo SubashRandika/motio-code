@@ -962,3 +962,84 @@ another user's avatar touches nothing.
 Cropping, resizing and format conversion. A 2MB limit and `next/image` doing the
 downscaling is enough for a 32px circle, and an in-browser cropper is a feature
 in its own right rather than part of this one.
+
+## Error handling
+
+### A boundary is a decision about blast radius
+
+It is easy to wrap everything in error boundaries and feel safer without being
+safer. A boundary decides how much of the tree dies when something throws, so
+each one here is placed where the damage should stop, not wherever an error
+might occur.
+
+The one that matters is around each **element on the canvas**. The canvas draws
+user content, and losing it means losing the only way to select and repair the
+element that broke it — along with every unsaved edit sitting in the store
+behind it. So one element that throws becomes one dashed red box, still
+selectable, in the place the element was.
+
+### The editor and the renderer want opposite things from the same failure
+
+`ProjectComposition` takes `isolateElements`, and the editor is the only caller
+that passes it.
+
+In the editor, containment is obviously right. In a render it is obviously
+wrong: a contained failure would silently bake a placeholder into a video
+someone is about to publish. There the throw should propagate, so the export
+reports a failed render instead of producing a file with a red box in it. The
+same component, two callers, opposite requirements — which is why it is a prop
+and not a default.
+
+### A boundary that has caught, stays caught
+
+Until something tells it otherwise. That is the subtle failure: the user fixes
+the element, and the fallback is still there, so the fix looks like it did not
+work. `resetKeys` is what closes that loop, and on the canvas the key is the
+element object itself — the store replaces it on every edit, so changing
+anything about a broken element makes it try again.
+
+### Four boundaries, four different messages
+
+- `app/global-error.tsx` — the root layout itself failed, so this replaces the
+  document and ships its own `<html>`, `<body>` and inline styles. It cannot use
+  the design tokens or the fonts, because those are among the things that may
+  have been what failed.
+- `app/error.tsx` — anything else with no closer boundary.
+- `app/(app)/error.tsx` — a segment boundary keeps the layout above it, so the
+  header and its navigation survive and there is still a way out. The root
+  boundary replaces all of that and leaves someone on a dead page.
+- `.../editor/error.tsx` — the editor gets its own because the honest message is
+  different: the working copy lives in a store inside this segment, so unsaved
+  edits are gone by the time it renders. Saying "try again" without saying that
+  would be misleading.
+
+### The not-found page was unreachable for the people most likely to need it
+
+The proxy listed *public* paths and gated everything else, which quietly meant
+that any path matching no route at all counted as protected. A signed-out
+visitor following a stale link met a login form, and after signing in was
+delivered to the 404 they were always going to get.
+
+It now lists the protected prefixes instead. The usual objection — forgetting to
+add a route makes it public — is not the failure mode here: every page in the
+signed-in group renders under a layout that calls `requireUser()`, so the server
+redirects regardless. This gate exists to avoid rendering a page that is about
+to be thrown away, not to be the only lock. `tests/core/route-gate.test.ts` pins
+both directions, and `e2e/auth-gate.spec.ts` walks every protected route from a
+browser.
+
+Matching is by path segment, not string prefix, so `/dashboardextra` is not
+inside `/dashboard`.
+
+### What was already right
+
+Worth recording, because it is the reason this section is not longer:
+
+- **Stored JSON never throws on the way in.** `parseOrDefault` in the mappers
+  validates every blob and falls back to defaults, so a corrupt config costs one
+  config rather than the project, and dangling connectors are pruned on load.
+- **Autosave already degrades well.** It debounces, guards against overlapping
+  saves, reports failure without discarding the working copy, and warns before
+  the tab closes with unsaved work.
+- **A project that is not yours is a 404, not a 403.** Anything else confirms
+  the project exists.

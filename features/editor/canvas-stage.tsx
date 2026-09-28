@@ -118,7 +118,14 @@ export function CanvasStage({ timeline, frame }: { timeline: Timeline; frame: nu
         >
           {/* The same tree the renderer draws. The editor only adds the scaling
               wrapper above and the selection chrome below. */}
-          <ProjectComposition project={project} frame={frame} timeline={timeline} />
+          <ProjectComposition
+            project={project}
+            frame={frame}
+            timeline={timeline}
+            // One element that throws should cost one element, not the canvas
+            // and every unsaved edit sitting in the store behind it.
+            isolateElements
+          />
         </div>
 
         <SelectionOverlay
