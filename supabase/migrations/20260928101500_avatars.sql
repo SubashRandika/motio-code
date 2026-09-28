@@ -1,4 +1,4 @@
--- MotioCode 0005 -- a picture people choose, and a way to say no to Gravatar.
+-- MotioCode -- a picture people choose, and a way to say no to Gravatar.
 --
 -- Two things arrive together because they are two halves of one decision: what
 -- the header shows for a user. The order of preference is
@@ -25,7 +25,7 @@ comment on column public.profiles.use_gravatar is
 -- --------------------------------------------------------------- the bucket
 --
 -- This is the only PUBLIC bucket in the project, which is a deliberate
--- exception to the convention in 0002, for one reason: caching.
+-- exception to the convention in motiocode_storage_buckets, for one reason: caching.
 --
 -- A private bucket is read through a signed URL, and a signed URL carries a
 -- fresh signature every time it is generated. The header renders avatars

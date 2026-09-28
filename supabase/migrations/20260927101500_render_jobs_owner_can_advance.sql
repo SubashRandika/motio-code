@@ -1,7 +1,8 @@
--- MotioCode 0004 -- let the owner advance their own render job.
+-- MotioCode -- let the owner advance their own render job.
 --
--- 0001 assumed the renderer would be a server-side service using service_role,
--- which bypasses RLS, so it deliberately gave clients no UPDATE on render_jobs.
+-- motiocode_core_schema assumed the renderer would be a server-side service
+-- holding service_role, which bypasses RLS, so it deliberately gave clients no
+-- UPDATE on render_jobs.
 -- The export prototype renders in the browser instead: the owner's own session
 -- *is* the renderer, and it has to report progress and the outcome.
 --

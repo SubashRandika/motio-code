@@ -570,10 +570,11 @@ by `service_role`, never by a client.
 
 ### A job's status is written by its renderer
 
-Migration `0001` gave clients no UPDATE on `render_jobs`, on the assumption that a
+The `motiocode_core_schema` migration gave clients no UPDATE on `render_jobs`, on
+the assumption that a
 server-side service holding `service_role` would advance them. With the renderer
 in the browser, the owner's own session is the renderer and has to report the
-outcome, so `0004` adds an owner-scoped UPDATE policy.
+outcome, so `render_jobs_owner_can_advance` adds an owner-scoped UPDATE policy.
 
 The grant is **column-scoped**, because RLS cannot restrict columns and these
 columns are not equal. `status`, `progress`, `error_message`, `started_at` and
@@ -691,6 +692,32 @@ Stored scenes outlive the code that wrote them. Two rules:
   else in the engine changes. So is a new animation kind: `tests/core/persistence.test.ts`
   iterates `ANIMATION_TYPES` rather than a hand-written list, so one cannot be
   added without being covered.
+
+### Migrations are named the way the CLI names them
+
+`<utc-timestamp>_<name>.sql`, which is what `supabase migration new` produces.
+
+They were once numbered `0001`–`0005`, which read more nicely and was wrong in a
+way that only shows up under the CLI. The remote history table records the
+version taken from the filename prefix, and the first three had been applied
+through the dashboard under their timestamps. So local and remote shared no
+versions at all: `supabase migration list` showed five local migrations with no
+remote counterpart and three remote with no local one, and `supabase db push`
+would have tried to re-run the schema from scratch against a live database.
+
+Renaming to the timestamps the remote history already held made four of them
+line up; `supabase migration repair --status applied` recorded the two that had
+been run by hand. `db push` now reports `up to date`, which is the only useful
+state for it to be in.
+
+Two consequences worth keeping in mind:
+
+- **Refer to a migration by its name, not its number.** The prose above says
+  `motiocode_storage_buckets` rather than `0002` for exactly this reason.
+- **Applying SQL outside a migration leaves the history wrong.** Running DDL
+  through `execute_sql` or the dashboard changes the database without recording
+  anything, and the gap is invisible until a push goes wrong. Either use the
+  migration path, or repair afterwards.
 
 A connector is excluded from `createElement`'s input type rather than left as a
 branch that could only produce an invalid element — it is drawn between two
@@ -884,7 +911,7 @@ needs to know who is being asked and what is being sent.
 
 ### The avatars bucket is public, and it is the only one
 
-Every other bucket in `0002` is private. This one is not, for a reason worth
+Every other bucket in `motiocode_storage_buckets` is private. This one is not, for a reason worth
 writing down: a private object is read through a signed URL, a signed URL is
 different every time it is generated, and `next/image` caches on the URL. A
 fresh signature per render means a cache key per render — the optimizer would
