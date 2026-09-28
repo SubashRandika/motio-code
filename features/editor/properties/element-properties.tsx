@@ -42,6 +42,9 @@ import {
   ToggleField,
 } from "./controls";
 
+import { FieldHelp } from "./field-help";
+import { HELP } from "./help-text";
+
 export function ElementProperties({
   element,
   fps,
@@ -83,6 +86,7 @@ export function ElementProperties({
       >
         <TextField
           label="Name"
+          help={HELP.elementName}
           value={element.name}
           maxLength={120}
           onChange={(name) =>
@@ -95,6 +99,7 @@ export function ElementProperties({
 
         <div className="flex items-center gap-1">
           <Label>Layer</Label>
+          <FieldHelp id="element-layer-help" text={HELP.elementLayer} />
           <div className="ml-auto flex items-center gap-0.5">
             <IconAction label="Bring to front" onClick={() => reorderElement(element.id, "front")}>
               <ArrowUpToLine className="size-3" />
@@ -114,6 +119,7 @@ export function ElementProperties({
         <Row>
           <ToggleField
             label="Locked"
+            help={HELP.elementLocked}
             checked={element.locked}
             onChange={(locked) =>
               updateElement(element.id, (item) => ({ ...item, locked }), {
@@ -123,6 +129,7 @@ export function ElementProperties({
           />
           <ToggleField
             label="Hidden"
+            help={HELP.elementHidden}
             checked={element.hidden}
             onChange={(hidden) =>
               updateElement(element.id, (item) => ({ ...item, hidden }), {
@@ -137,12 +144,18 @@ export function ElementProperties({
       {element.type === "connector" ? null : (
       <Section title="Position and size">
         <Row>
-          <NumberField label="X" value={element.rect.x} onChange={(x) => setRect({ x }, "x")} />
+          <NumberField
+            label="X"
+            help={HELP.elementPosition}
+            value={element.rect.x}
+            onChange={(x) => setRect({ x }, "x")}
+          />
           <NumberField label="Y" value={element.rect.y} onChange={(y) => setRect({ y }, "y")} />
         </Row>
         <Row>
           <NumberField
             label="Width"
+            help={HELP.elementSize}
             value={element.rect.width}
             min={1}
             onChange={(width) => setRect({ width }, "width")}
@@ -162,6 +175,7 @@ export function ElementProperties({
         <Row>
           <NumberField
             label="Starts at"
+            help={HELP.elementStartsAt}
             value={element.from}
             min={0}
             max={sceneDurationInFrames - 1}
@@ -172,6 +186,7 @@ export function ElementProperties({
           />
           <NumberField
             label="Length"
+            help={HELP.elementLength}
             value={element.durationInFrames ?? sceneDurationInFrames - element.from}
             min={1}
             suffix="f"
@@ -188,6 +203,7 @@ export function ElementProperties({
 
         <ToggleField
           label="Runs to the end of the scene"
+          help={HELP.elementRunsToEnd}
           checked={runsToSceneEnd}
           onChange={(checked) =>
             setElementTiming(element.id, {
@@ -270,6 +286,7 @@ export function ElementProperties({
           />
           <NumberField
             label="Opacity"
+            help={HELP.elementOpacity}
             value={element.style.opacity}
             min={0}
             max={1}

@@ -2,8 +2,17 @@
 
 import { useId } from "react";
 
-import { Input, Label, Select } from "@/components/ui/field";
+import { Input, Select } from "@/components/ui/field";
 import { cn } from "@/lib/utils/cn";
+
+import { FieldLabel } from "./field-help";
+
+/**
+ * Every control takes an optional `help`. Wiring it here rather than at each
+ * call site means the description is attached to the input with
+ * `aria-describedby` the same way every time -- which is the part that is easy
+ * to forget when each panel does its own.
+ */
 
 export function Section({
   title,
@@ -39,22 +48,28 @@ export function TextField({
   onChange,
   maxLength,
   placeholder,
+  help,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   maxLength?: number;
   placeholder?: string;
+  help?: string;
 }) {
   const id = useId();
+  const helpId = `${id}-help`;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <FieldLabel id={helpId} htmlFor={id} help={help}>
+        {label}
+      </FieldLabel>
       <Input
         id={id}
         value={value}
         maxLength={maxLength}
         placeholder={placeholder}
+        aria-describedby={help ? helpId : undefined}
         onChange={(event) => onChange(event.target.value)}
       />
     </div>
@@ -70,6 +85,7 @@ export function NumberField({
   step = 1,
   suffix,
   disabled,
+  help,
 }: {
   label: string;
   value: number;
@@ -79,11 +95,15 @@ export function NumberField({
   step?: number;
   suffix?: string;
   disabled?: boolean;
+  help?: string;
 }) {
   const id = useId();
+  const helpId = `${id}-help`;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <FieldLabel id={helpId} htmlFor={id} help={help}>
+        {label}
+      </FieldLabel>
       <div className="relative">
         <Input
           id={id}
@@ -93,6 +113,7 @@ export function NumberField({
           max={max}
           step={step}
           disabled={disabled}
+          aria-describedby={help ? helpId : undefined}
           onChange={(event) => {
             const next = Number(event.target.value);
             if (Number.isFinite(next)) onChange(next);
@@ -114,17 +135,27 @@ export function SelectField<T extends string>({
   value,
   options,
   onChange,
+  help,
 }: {
   label: string;
   value: T;
   options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
+  help?: string;
 }) {
   const id = useId();
+  const helpId = `${id}-help`;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Select id={id} value={value} onChange={(event) => onChange(event.target.value as T)}>
+      <FieldLabel id={helpId} htmlFor={id} help={help}>
+        {label}
+      </FieldLabel>
+      <Select
+        id={id}
+        value={value}
+        aria-describedby={help ? helpId : undefined}
+        onChange={(event) => onChange(event.target.value as T)}
+      >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -140,20 +171,26 @@ export function ColorField({
   value,
   onChange,
   allowNone,
+  help,
 }: {
   label: string;
   value: string | null;
   onChange: (value: string | null) => void;
   allowNone?: boolean;
+  help?: string;
 }) {
   const id = useId();
+  const helpId = `${id}-help`;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <FieldLabel id={helpId} htmlFor={id} help={help}>
+        {label}
+      </FieldLabel>
       <div className="flex items-center gap-2">
         <input
           id={id}
           type="color"
+          aria-describedby={help ? helpId : undefined}
           value={(value ?? "#000000").slice(0, 7)}
           onChange={(event) => onChange(event.target.value)}
           className="h-9 w-10 shrink-0 cursor-pointer rounded border border-edge bg-ink-sunk"
@@ -179,19 +216,25 @@ export function ToggleField({
   label,
   checked,
   onChange,
+  help,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  help?: string;
 }) {
   const id = useId();
+  const helpId = `${id}-help`;
   return (
     <div className="flex items-center justify-between gap-2">
-      <Label htmlFor={id}>{label}</Label>
+      <FieldLabel id={helpId} htmlFor={id} help={help}>
+        {label}
+      </FieldLabel>
       <input
         id={id}
         type="checkbox"
         checked={checked}
+        aria-describedby={help ? helpId : undefined}
         onChange={(event) => onChange(event.target.checked)}
         className="size-4 accent-[var(--color-amber)]"
       />

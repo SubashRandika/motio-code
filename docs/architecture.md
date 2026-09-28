@@ -1043,3 +1043,65 @@ Worth recording, because it is the reason this section is not longer:
   the tab closes with unsaved work.
 - **A project that is not yours is a 404, not a 403.** Anything else confirms
   the project exists.
+
+## Explaining the properties panel
+
+The panel is 288px wide and holds forty-odd controls, so the constraint on any
+help affordance is that it must cost nothing when it is not wanted. Three
+choices follow.
+
+### It lives in space that was already empty
+
+Every label in the panel is one or two words with an empty third of a row after
+it. A quiet `ⓘ` there fills space nothing was using, rather than competing with
+the controls. The alternative — hint text under each field — would roughly
+double the height of the panel permanently, to answer a question most users have
+once.
+
+### The description is attached to the input, not only to the tooltip
+
+This is the part that is easy to skip and matters most. `aria-describedby` on
+the control means a screen reader reads the explanation when the user lands on
+the field. Without it, the sighted path and the assistive path would be two
+different features and the assistive one would be much worse — discover a
+tooltip, tab to it, read it, tab back.
+
+So the description element is always rendered, whether or not the tooltip is
+open. A description that existed only while a tooltip was visible would reach
+only the people who had already found the tooltip.
+
+### The popover is `fixed`, and closes on scroll
+
+The panel is a scroll container, and a scroll container clips its children in
+both directions — `overflow-y: auto` forces `overflow-x` to clip too. An
+absolutely positioned tooltip would be readable next to `Duration` and sliced in
+half next to `Height`, which sits in the right-hand column of a two-column row
+against the window's edge.
+
+Fixed positioning leaves the container entirely. The cost is that it does not
+follow scrolling, so it closes on scroll rather than drifting away from its
+field. `placePopover` is a pure function and is unit-tested, because jsdom has
+no layout engine and this is the kind of geometry that is wrong only on the
+screen.
+
+### The copy is the feature
+
+A tooltip on `Duration` reading "the duration" has cost a hover and said
+nothing. The ones worth having answer a question someone would otherwise answer
+by experiment:
+
+- changing export frame rate **resamples** the animation rather than retiming it
+- a mismatched export aspect ratio is **fitted and centred**, never cropped
+- the composition theme is **not** the editor's theme
+
+All of it lives in one file so the whole set can be read as a piece and kept in
+one voice, and the tests assert the writing as well as the markup: long enough
+to explain, short enough to read, written as sentences, and — for the three
+above — actually containing the surprise.
+
+### Opens on hover, focus and click
+
+Hover for the common case, focus so a keyboard user gets the same thing, and
+click to pin it open for reading at length or for a touch screen. Escape closes
+it and stops the event, so dismissing a tooltip does not also clear the canvas
+selection through the editor's global shortcut handler.

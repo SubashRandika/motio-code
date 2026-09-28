@@ -36,6 +36,7 @@ import {
   TextField,
 } from "./properties/controls";
 import { ElementProperties } from "./properties/element-properties";
+import { HELP } from "./properties/help-text";
 import { selectActiveScene, selectSelectedElements } from "./store";
 import { useEditorStore } from "./store-provider";
 
@@ -160,6 +161,7 @@ function SceneProperties() {
     <Section title="Scene">
       <TextField
         label="Name"
+        help={HELP.sceneName}
         value={scene.name}
         maxLength={120}
         onChange={(name) => renameScene(scene.id, name)}
@@ -168,6 +170,7 @@ function SceneProperties() {
       <Row>
         <NumberField
           label="Duration"
+          help={HELP.sceneDuration}
           value={scene.durationInFrames}
           min={1}
           max={108000}
@@ -183,6 +186,7 @@ function SceneProperties() {
 
       <SelectField
         label="Enters with"
+        help={HELP.sceneTransition}
         value={transition?.type ?? "cut"}
         options={TRANSITION_OPTIONS}
         onChange={(type) =>
@@ -203,6 +207,7 @@ function SceneProperties() {
       {transition && transition.type !== "cut" ? (
         <NumberField
           label="Transition length"
+          help={HELP.transitionLength}
           value={transition.durationInFrames}
           min={1}
           max={300}
@@ -224,6 +229,7 @@ function CanvasProperties() {
     <Section title="Canvas">
       <SelectField
         label="Aspect ratio"
+        help={HELP.canvasAspectRatio}
         value={canvas.aspectRatio}
         options={ASPECT_RATIOS.map((ratio) => ({
           value: ratio,
@@ -237,6 +243,7 @@ function CanvasProperties() {
 
       <SelectField
         label="Frame rate"
+        help={HELP.canvasFps}
         value={String(canvas.fps)}
         options={FPS_OPTIONS.map((fps) => ({ value: String(fps), label: `${fps} fps` }))}
         onChange={(fps) => setCanvas({ fps: Number(fps) })}
@@ -244,6 +251,7 @@ function CanvasProperties() {
 
       <ColorField
         label="Background"
+        help={HELP.canvasBackground}
         value={canvas.background}
         onChange={(background) => setCanvas({ background: background ?? "#000000" })}
       />
@@ -260,6 +268,7 @@ function ThemeProperties() {
     <Section title="Theme">
       <SelectField
         label="Composition theme"
+        help={HELP.compositionTheme}
         value={theme.name}
         options={BUILT_IN_THEMES.map((item) => ({ value: item.name, label: item.name }))}
         onChange={(name) => {
@@ -303,6 +312,7 @@ function ExportProperties() {
       <Row>
         <SelectField
           label="Format"
+          help={HELP.exportFormat}
           value={exportConfig.format}
           options={[
             { value: "mp4" as const, label: "MP4" },
@@ -313,6 +323,7 @@ function ExportProperties() {
         />
         <SelectField
           label="Resolution"
+          help={HELP.exportResolution}
           value={exportConfig.resolution}
           options={EXPORT_RESOLUTIONS.map((resolution) => ({
             value: resolution,
@@ -325,6 +336,7 @@ function ExportProperties() {
       <Row>
         <SelectField
           label="Aspect ratio"
+          help={HELP.exportAspectRatio}
           value={exportConfig.aspectRatio}
           options={ASPECT_RATIOS.map((aspectRatio) => ({
             value: aspectRatio,
@@ -334,6 +346,7 @@ function ExportProperties() {
         />
         <SelectField
           label="Frame rate"
+          help={HELP.exportFps}
           value={String(exportConfig.fps)}
           options={FPS_OPTIONS.map((fps) => ({ value: String(fps), label: `${fps} fps` }))}
           onChange={(fps) => setExport({ fps: Number(fps) })}
