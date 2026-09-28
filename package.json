@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "screenshots": "node --no-warnings --experimental-strip-types scripts/capture-screenshots.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
