@@ -6,8 +6,7 @@ A motion-design studio for engineers. Build an explanation on a scene timeline,
 watch it play in the browser, and export it as video — without opening After
 Effects.
 
-> **Live demo:** _not deployed yet._ Replace this line with the Vercel URL once
-> it is hosted — for example `https://motiocode.vercel.app`.
+**[Live Demo](https://motio-code.vercel.app/)**
 
 ![The MotioCode landing page: the tagline beside a code panel revealing line by line, with a highlighted line, a callout, and a scene timeline underneath](docs/screenshots/landing.png)
 
@@ -22,11 +21,11 @@ scene timeline and exported in the shape each platform wants.
 
 Three studios share one project model, one animation model and one export path:
 
-| Studio | For |
-| --- | --- |
-| **Code** | Reveal a snippet line by line, hold on the line that matters, caption it in place. |
-| **Diagrams** | Lay services and connections out on a canvas, or write the definition as Mermaid text and let MotioCode draw it. |
-| **Infographics** | Counters, bars, comparisons and step sequences that stay faithful to the numbers you typed. |
+| Studio           | For                                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Code**         | Reveal a snippet line by line, hold on the line that matters, caption it in place.                               |
+| **Diagrams**     | Lay services and connections out on a canvas, or write the definition as Mermaid text and let MotioCode draw it. |
+| **Infographics** | Counters, bars, comparisons and step sequences that stay faithful to the numbers you typed.                      |
 
 ### The one idea everything rests on
 
@@ -42,13 +41,13 @@ The MVP is built through Phase 4 and partway through Phase 5. It is a working
 application, not a prototype: you can sign up, build a project from a template,
 edit it, preview it and download an MP4.
 
-| Phase | |
-| --- | --- |
-| 1 — Foundation | ✅ Auth, dashboard, schema, project CRUD, editor shell |
-| 2 — Core editor | ✅ Canvas, selection, scenes, properties, timeline, playback, undo/redo |
-| 3 — Content modules | ✅ Code, diagrams, infographics, presets, 10 starter templates |
-| 4 — Preview and export | ✅ Remotion composition, browser preview, in-tab render, download |
-| 5 — MVP polish | 🟡 Duplication, export history, responsive, accessibility and E2E done; error handling, performance, deployment remaining |
+| Phase                  |                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 1 — Foundation         | ✅ Auth, dashboard, schema, project CRUD, editor shell                                                                    |
+| 2 — Core editor        | ✅ Canvas, selection, scenes, properties, timeline, playback, undo/redo                                                   |
+| 3 — Content modules    | ✅ Code, diagrams, infographics, presets, 10 starter templates                                                            |
+| 4 — Preview and export | ✅ Remotion composition, browser preview, in-tab render, download                                                         |
+| 5 — MVP polish         | 🟡 Duplication, export history, responsive, accessibility and E2E done; error handling, performance, deployment remaining |
 
 #### Working today
 
@@ -130,15 +129,15 @@ Open <http://localhost:3000>.
 
 ## Scripts
 
-| | |
-| --- | --- |
-| `pnpm dev` | Development server |
-| `pnpm build` / `pnpm start` | Production build and serve |
-| `pnpm test` | Unit and component tests |
-| `pnpm test:e2e` | Playwright, against a production build on port 3100 |
-| `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm lint` | ESLint |
-| `pnpm screenshots` | Regenerate the images in this README |
+|                             |                                                     |
+| --------------------------- | --------------------------------------------------- |
+| `pnpm dev`                  | Development server                                  |
+| `pnpm build` / `pnpm start` | Production build and serve                          |
+| `pnpm test`                 | Unit and component tests                            |
+| `pnpm test:e2e`             | Playwright, against a production build on port 3100 |
+| `pnpm typecheck`            | `tsc --noEmit`                                      |
+| `pnpm lint`                 | ESLint                                              |
+| `pnpm screenshots`          | Regenerate the images in this README                |
 
 ## Testing
 
